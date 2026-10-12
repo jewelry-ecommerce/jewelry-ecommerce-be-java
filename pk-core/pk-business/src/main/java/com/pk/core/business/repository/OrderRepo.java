@@ -29,4 +29,9 @@ public interface OrderRepo extends PkRepo<OrderEntity, Long> {
     @Modifying
     int updateStatusIfCurrent(@Param("id") Long id, @Param("fromStatus") String fromStatus,
                               @Param("toStatus") String toStatus);
+
+    /** Ghi nhận hoàn tiền NGUYÊN TỬ: chỉ khi đơn đang PAID và tổng đã hoàn + amount <= tổng đơn. Hoàn đủ thì payment_status = REFUNDED,
+     * hoàn một phần thì giữ PAID. Trả 0 nếu vượt số còn hoàn được hoặc đơn chưa thanh toán. */
+    @Modifying
+    int addRefund(@Param("id") Long id, @Param("amount") java.math.BigDecimal amount);
 }

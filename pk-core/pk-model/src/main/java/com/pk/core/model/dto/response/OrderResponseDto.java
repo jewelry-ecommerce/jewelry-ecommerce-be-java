@@ -48,6 +48,8 @@ public class OrderResponseDto extends UpdateDto {
     /** null nếu thanh toán COD (không tạo PaymentEntity) - xem OrderServiceImpl.create(). Dùng
      * paymentId này để gọi POST /storefront/payment/{paymentId}/callback. */
     private Long paymentId;
+    /** Tổng tiền đã hoàn (hoàn từng phần cộng dồn). */
+    private BigDecimal refundedAmount = BigDecimal.ZERO;
     private List<OrderItemResponseDto> items;
     private List<OrderTimelineResponseDto> timeline;
 
@@ -58,12 +60,18 @@ public class OrderResponseDto extends UpdateDto {
                 o.getShipPhone(), o.getShipProvince(), o.getShipDistrict(), o.getShipWard(),
                 o.getShipAddressLine(), o.getSubtotal(), o.getProductDiscount(), o.getVoucherDiscount(),
                 o.getShippingFee(), o.getGrandTotal(), o.getAppliedVoucherCode(), o.getNote(), o.getPlacedAt(),
-                paymentId, items, timeline);
+                paymentId, o.getRefundedAmount() == null ? BigDecimal.ZERO : o.getRefundedAmount(), items, timeline);
         dto.copyAudit(o);
         return dto;
     }
 
     // ---- FE OrderDetailResponse: field tính toán, giữ nguyên field cũ (status/tiền giữ kiểu hiện tại) ----
+
+    /** Số tiền còn hoàn được = tổng đơn - đã hoàn. */
+    public BigDecimal getRefundableAmount() {
+        BigDecimal total = grandTotal == null ? BigDecimal.ZERO : grandTotal;
+        return total.subtract(refundedAmount == null ? BigDecimal.ZERO : refundedAmount).max(BigDecimal.ZERO);
+    }
 
     public String getOrderCode() {
         return code;

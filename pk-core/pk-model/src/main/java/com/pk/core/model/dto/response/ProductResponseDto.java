@@ -22,7 +22,6 @@ import java.util.Set;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class ProductResponseDto extends BaseDto {
 
     /** FE dùng id dạng chuỗi ("12"); kiểu Java vẫn là Long. */
@@ -48,6 +47,47 @@ public class ProductResponseDto extends BaseDto {
     private String categorySlug;
     /** Ảnh/video trong thư viện media (service nạp sau khi dựng DTO). */
     private List<ProductMediaResponseDto> media = new ArrayList<>();
+
+    // ---- Dữ liệu PIM mở rộng (V18). Admin nhận đủ; storefront chỉ nhận SEO/thông tin bổ sung ở trang chi tiết (service điền). ----
+    private String unitOfMeasure;
+    /** Thuế suất riêng (%), admin-only. */
+    private BigDecimal taxRateOverride;
+    private BigDecimal weightGram;
+    private BigDecimal length;
+    private BigDecimal width;
+    private BigDecimal height;
+    private String metaTitle;
+    private String metaDescription;
+    private String metaKeywords;
+    /** Khối thông tin bổ sung [{title, description, sortOrder}]; chỉ có ở chi tiết. */
+    private List<ProductInfoResponseDto> productInfos;
+    /** Sản phẩm phối kèm; chỉ có ở chi tiết admin. */
+    private List<ProductMixMatchResponseDto> productMixMatch;
+
+    public ProductResponseDto(Long id, String code, String name, String slug, String shortDescription,
+                              String description, String status, Long categoryId, String categoryName, String material,
+                              String occasion, String thumbnailUrl, BigDecimal priceFrom,
+                              List<ProductSkuResponseDto> skus, List<CollectionResponseDto> collections,
+                              Date publishedAt, String categorySlug, List<ProductMediaResponseDto> media) {
+        this.id = id;
+        this.code = code;
+        this.name = name;
+        this.slug = slug;
+        this.shortDescription = shortDescription;
+        this.description = description;
+        this.status = status;
+        this.categoryId = categoryId;
+        this.categoryName = categoryName;
+        this.material = material;
+        this.occasion = occasion;
+        this.thumbnailUrl = thumbnailUrl;
+        this.priceFrom = priceFrom;
+        this.skus = skus;
+        this.collections = collections;
+        this.publishedAt = publishedAt;
+        this.categorySlug = categorySlug;
+        this.media = media;
+    }
 
     public static ProductResponseDto from(ProductEntity p, String categoryName, BigDecimal priceFrom,
                                            List<ProductSkuResponseDto> skus, List<CollectionResponseDto> collections) {

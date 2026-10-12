@@ -16,7 +16,6 @@ import java.util.Map;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class ProductSkuResponseDto extends BaseDto {
 
     @JsonFormat(shape = JsonFormat.Shape.STRING)
@@ -37,6 +36,36 @@ public class ProductSkuResponseDto extends BaseDto {
     private boolean isDefault;
     /** Thuộc tính cấu hình (product_attributes) đã gán cho SKU: [{id, code, name, type, value, values[]}]. */
     private List<Map<String, Object>> attributeBindings = new ArrayList<>();
+
+    // ---- Chỉ admin (service điền; storefront để null nên không lộ giá vốn/giá sỉ) - V18. ----
+    private BigDecimal costPrice;
+    private BigDecimal b2bWholesalePrice;
+    private BigDecimal taxRateOverride;
+    private BigDecimal length;
+    private BigDecimal width;
+    private BigDecimal height;
+
+    public ProductSkuResponseDto(Long id, String skuCode, String name, String status, String material, String gemstone,
+                                 String sizeLabel, String metalColorLabel, BigDecimal caratWeight,
+                                 BigDecimal weightGram, BigDecimal listPrice, BigDecimal salePrice, int availableStock,
+                                 String stockStatus, boolean isDefault, List<Map<String, Object>> attributeBindings) {
+        this.id = id;
+        this.skuCode = skuCode;
+        this.name = name;
+        this.status = status;
+        this.material = material;
+        this.gemstone = gemstone;
+        this.sizeLabel = sizeLabel;
+        this.metalColorLabel = metalColorLabel;
+        this.caratWeight = caratWeight;
+        this.weightGram = weightGram;
+        this.listPrice = listPrice;
+        this.salePrice = salePrice;
+        this.availableStock = availableStock;
+        this.stockStatus = stockStatus;
+        this.isDefault = isDefault;
+        this.attributeBindings = attributeBindings;
+    }
 
     public static ProductSkuResponseDto from(ProductSkuEntity s) {
         return BaseDto.of(new ProductSkuResponseDto(s.getId(), s.getSkuCode(), s.getName(), s.getStatus(),

@@ -34,6 +34,8 @@ import static org.mockito.Mockito.when;
 class PreOrderAndAccessServiceTest {
 
     @Mock PreOrderConfigRepo configs;
+    @Mock com.pk.core.business.repository.ProductRepo products;
+    @Mock com.pk.core.business.repository.CollectionRepo collections;
     @Mock UserRepo users;
     @Mock RoleRepo roles;
 
@@ -62,7 +64,7 @@ class PreOrderAndAccessServiceTest {
 
     @Test
     void createStoresEnabledTrimmedMessageAndAdminId() {
-        PreOrderServiceImpl service = new PreOrderServiceImpl(configs);
+        PreOrderServiceImpl service = new PreOrderServiceImpl(configs, products, collections);
 
         PreOrderConfigResponseDto dto = service.create(9L, new PreOrderConfigRequestDto(true, "  Đặt trước giao sau 7 ngày "));
 
@@ -77,7 +79,7 @@ class PreOrderAndAccessServiceTest {
 
     @Test
     void createWithBlankMessageStoresNull() {
-        PreOrderServiceImpl service = new PreOrderServiceImpl(configs);
+        PreOrderServiceImpl service = new PreOrderServiceImpl(configs, products, collections);
 
         PreOrderConfigResponseDto dto = service.create(9L, new PreOrderConfigRequestDto(false, "   "));
 
@@ -88,7 +90,7 @@ class PreOrderAndAccessServiceTest {
     @Test
     void listReturnsNewestFirst() {
         when(configs.findAll(any(Sort.class))).thenReturn(List.of(config(1L, true, "a"), config(3L, false, "c"), config(2L, true, "b")));
-        PreOrderServiceImpl service = new PreOrderServiceImpl(configs);
+        PreOrderServiceImpl service = new PreOrderServiceImpl(configs, products, collections);
 
         List<PreOrderConfigResponseDto> list = service.list();
 

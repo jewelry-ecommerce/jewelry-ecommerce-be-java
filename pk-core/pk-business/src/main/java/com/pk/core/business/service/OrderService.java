@@ -50,7 +50,7 @@ public interface OrderService {
 
     /** POST /admin/orders/{orderCode}/return - chỉ khi đơn DELIVERED (OrderEntity.isReturnable()),
      * nhả tồn kho CÁC DÒNG trong lineIds (không phải toàn đơn), chuyển status RETURNED. */
-    OrderResponseDto returnOrder(String code, List<Long> lineIds);
+    OrderResponseDto returnOrder(String code, com.pk.core.model.dto.request.AdminOrderReturnRequestDto request);
 
     /** POST /admin/orders/{orderCode}/refund - chỉ khi đơn paymentStatus=PAID, chuyển paymentStatus
      * sang REFUNDED, ghi amount/reason vào timeline (xem AdminOrderRefundRequestDto javadoc). */

@@ -247,4 +247,46 @@ class PimPublishToCartFlowIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.data.items.length()").value(1))
                 .andExpect(jsonPath("$.data.items[0].variationId").value(String.valueOf(b[1])));
     }
+
+    @Test
+    void unpublishedProductCannotBeQuotedOrOrderedFromAnOldCartAndStockIsUntouched() throws Exception {
+        String auth = admin();
+        String t = tag();
+        long[] ids = createProduct(auth, createCategory(auth, t), t);
+        // SKU phải PUBLISHED để bán được; publish sản phẩm đưa SKU lên PUBLISHED.
+        mvc.perform(patch(CATALOG + "/" + ids[0] + "/publish").header("Authorization", auth)).andExpect(status().isOk());
+
+        String customer = bearer(customerAccessToken());
+        long addressId = body(mvc.perform(jsonRequest(post(V1 + UrlConstant.Me.ADDRESSES), Map.of("recipientName", "A",
+                        "phone", "0901234567", "province", "HCM", "district", "Q1", "ward", "P1", "addressLine", "1 Lê Lợi"))
+                        .header("Authorization", customer)).andExpect(status().isCreated())).get("id").asLong();
+        Map<String, Object> req = Map.of("addressId", addressId, "shippingMethod", "STANDARD", "paymentMethod", "COD",
+                "items", List.of(Map.of("skuId", ids[1], "quantity", 1)));
+
+        // Đang bán: quote OK và thêm giỏ OK.
+        mvc.perform(jsonRequest(post(V1 + UrlConstant.Checkout.QUOTE), req).header("Authorization", customer))
+                .andExpect(status().isOk());
+        mvc.perform(jsonRequest(post(CART), Map.of("clearAll", false, "items",
+                        List.of(Map.of("variationId", String.valueOf(ids[1]), "quantity", 1))))
+                        .header("Authorization", customer))
+                .andExpect(jsonPath("$.data.success").value(true));
+
+        mvc.perform(patch(CATALOG + "/" + ids[0] + "/unpublish").header("Authorization", auth)).andExpect(status().isOk());
+
+        // Ngừng bán: giỏ cũ báo dòng không còn bán, quote/đặt đơn bị từ chối, không giữ tồn, không tạo đơn.
+        mvc.perform(get(CART).header("Authorization", customer))
+                .andExpect(jsonPath("$.data.items[0].status").value("UNPUBLISHED"));
+        mvc.perform(jsonRequest(post(V1 + UrlConstant.Checkout.QUOTE), req).header("Authorization", customer))
+                .andExpect(status().isNotFound());
+        mvc.perform(jsonRequest(post(V1 + UrlConstant.Order.BASE), req).header("Authorization", customer))
+                .andExpect(status().isNotFound());
+        mvc.perform(get(V1 + UrlConstant.Order.BASE).header("Authorization", customer))
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+        mvc.perform(get(CATALOG + "/" + ids[0] + "/variants").header("Authorization", auth))
+                .andExpect(jsonPath("$.data[0].availableStock").value(5));
+        // Thêm vào giỏ cũng bị từ chối.
+        mvc.perform(jsonRequest(post(CART), Map.of("clearAll", false, "items",
+                        List.of(Map.of("variationId", String.valueOf(ids[1]), "quantity", 1)))))
+                .andExpect(jsonPath("$.data.success").value(false));
+    }
 }

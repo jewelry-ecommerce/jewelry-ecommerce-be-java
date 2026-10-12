@@ -24,10 +24,21 @@ public class OrderItemResponseDto {
     private int quantity;
     private BigDecimal unitPrice;
     private BigDecimal lineTotal;
+    /** Số lượng đã trả; còn trả được = quantity - returnedQuantity. */
+    private int returnedQuantity;
 
     public static OrderItemResponseDto from(OrderItemEntity i) {
         return new OrderItemResponseDto(i.getId(), i.getProductId(), i.getSkuId(), i.getName(), i.getImageUrl(),
-                i.getQuantity(), i.getUnitPrice(), i.getLineTotal());
+                i.getQuantity(), i.getUnitPrice(), i.getLineTotal(), i.getReturnedQuantity());
+    }
+
+    public OrderItemResponseDto(Long id, Long productId, Long skuId, String name, String imageUrl, int quantity,
+                                BigDecimal unitPrice, BigDecimal lineTotal) {
+        this(id, productId, skuId, name, imageUrl, quantity, unitPrice, lineTotal, 0);
+    }
+
+    public int getReturnableQuantity() {
+        return Math.max(quantity - returnedQuantity, 0);
     }
 
     // ---- FE OrderDetailItem: field tính toán, giữ nguyên field cũ ----

@@ -18,7 +18,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class AdminCreateProductRequestDto {
+public class AdminCreateProductRequestDto extends AdminProductExtraRequestDto {
 
     @NotNull(message = "Danh mục không được để trống")
     private Long categoryId;

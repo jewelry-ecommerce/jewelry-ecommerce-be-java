@@ -23,29 +23,41 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class BannerPlacementServiceImpl implements BannerPlacementService {
 
-    private static final Set<String> DISPLAY_TYPES = Set.of("CAROUSEL", "GRID", "SINGLE");
+    private static final Set<String> DISPLAY_TYPES = Set.of("CAROUSEL", "SLIDER", "GRID", "DOUBLE_BANNER", "POPUP", "SINGLE");
     private static final Pattern CODE = Pattern.compile("[A-Z0-9_]{1,60}");
 
+    private static final Set<String> PLATFORMS = Set.of("WEB", "APP", "ALL");
+    private static final Set<String> STATUSES = Set.of("ACTIVE", "INACTIVE");
+
     private final BannerPlacementRepo placements;
+    private final BannerLayoutSupport support;
 
     @Transactional(readOnly = true)
     @Override
     public List<BannerPlacementResponseDto> findAll() {
         return placements.findAll(Sort.unsorted()).stream()
                 .sorted(Comparator.comparing(BannerPlacementEntity::getId))
-                .map(BannerPlacementResponseDto::from).toList();
+                .map(this::toDto).toList();
     }
 
     @Transactional
     @Override
     public BannerPlacementResponseDto create(AdminBannerPlacementRequestDto req) {
-        String code = req.getCode() == null ? "" : req.getCode().trim().toUpperCase(Locale.ROOT);
+        if (req.getName() == null || req.getName().isBlank()) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "name không được để trống");
+        }
+        boolean given = req.getCode() != null && !req.getCode().isBlank();
+        String code = given ? req.getCode().trim().toUpperCase(Locale.ROOT) : codeFromName(req.getName());
         if (!CODE.matcher(code).matches()) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
                     "code chỉ gồm chữ, số, gạch dưới (tối đa 60 ký tự), ví dụ HOME_HERO", req.getCode());
         }
-        if (req.getName() == null || req.getName().isBlank()) {
-            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "name không được để trống");
+        if (!given) { // code tự sinh: thêm hậu tố _2, _3... nếu trùng
+            String base = code;
+            for (int i = 2; placements.findByCode(code) != null; i++) {
+                String suffix = "_" + i;
+                code = base.substring(0, Math.min(base.length(), 60 - suffix.length())) + suffix;
+            }
         }
         if (placements.findByCode(code) != null) {
             throw BusinessException.conflict(ErrorCode.DUPLICATE_CODE, "Mã vị trí banner đã tồn tại: " + code, code);
@@ -54,8 +66,11 @@ public class BannerPlacementServiceImpl implements BannerPlacementService {
         e.setCode(code);
         e.setName(req.getName().trim());
         e.setDisplayType(normalizeType(req.getDisplayType(), "CAROUSEL"));
+        e.setPlatform(normalizeEnum(req.getPlatform(), PLATFORMS, "ALL", "platform"));
+        e.setStatus(normalizeEnum(req.getStatus(), STATUSES, "ACTIVE", "status"));
+        e.setSettings(support.writeMap(BannerLayoutSupport.normalizeSettings(req.getSettings())));
         placements.create(e);
-        return BannerPlacementResponseDto.from(e);
+        return toDto(e);
     }
 
     @Transactional
@@ -74,8 +89,37 @@ public class BannerPlacementServiceImpl implements BannerPlacementService {
         if (req.getDisplayType() != null) {
             e.setDisplayType(normalizeType(req.getDisplayType(), e.getDisplayType()));
         }
+        e.setPlatform(normalizeEnum(req.getPlatform(), PLATFORMS, e.getPlatform(), "platform"));
+        e.setStatus(normalizeEnum(req.getStatus(), STATUSES, e.getStatus(), "status"));
+        if (req.getSettings() != null) { // {} = xoá cấu hình
+            e.setSettings(support.writeMap(BannerLayoutSupport.normalizeSettings(req.getSettings())));
+        }
         placements.update(e);
-        return BannerPlacementResponseDto.from(e);
+        return toDto(e);
+    }
+
+    private BannerPlacementResponseDto toDto(BannerPlacementEntity e) {
+        return BannerPlacementResponseDto.from(e, support.readMap(e.getSettings()));
+    }
+
+    private static String normalizeEnum(String v, Set<String> allowed, String fallback, String field) {
+        if (v == null || v.isBlank()) {
+            return fallback;
+        }
+        String t = v.trim().toUpperCase(Locale.ROOT);
+        if (!allowed.contains(t)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    field + " không hợp lệ: " + v + " (" + String.join(" | ", new java.util.TreeSet<>(allowed)) + ")", v);
+        }
+        return t;
+    }
+
+    /** "Banner Trang chủ" -> BANNER_TRANG_CHU. */
+    private static String codeFromName(String name) {
+        String ascii = java.text.Normalizer.normalize(name.trim(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").replace('đ', 'd').replace('Đ', 'D');
+        String code = ascii.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_").replaceAll("^_+|_+$", "");
+        return code.length() > 60 ? code.substring(0, 60) : code;
     }
 
     private static String normalizeType(String type, String fallback) {
@@ -85,7 +129,7 @@ public class BannerPlacementServiceImpl implements BannerPlacementService {
         String t = type.trim().toUpperCase(Locale.ROOT);
         if (!DISPLAY_TYPES.contains(t)) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
-                    "displayType không hợp lệ: " + type + " (CAROUSEL | GRID | SINGLE)", type);
+                    "displayType không hợp lệ: " + type + " (SLIDER | CAROUSEL | GRID | DOUBLE_BANNER | POPUP | SINGLE)", type);
         }
         return t;
     }

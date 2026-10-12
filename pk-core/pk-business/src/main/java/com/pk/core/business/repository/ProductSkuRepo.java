@@ -40,4 +40,8 @@ public interface ProductSkuRepo extends PkRepo<ProductSkuEntity, Long> {
      * InventoryServiceImpl ném 422 NEGATIVE_STOCK. */
     @Modifying
     int adjustOnHand(@Param("skuId") Long skuId, @Param("delta") int delta);
+
+    /** Chốt xuất tồn khi giao: on_hand -= qty và reserved -= qty (đều không âm; đơn đặt trước có thể on_hand < qty). */
+    @Modifying
+    int fulfillStock(@Param("skuId") Long skuId, @Param("qty") int qty);
 }

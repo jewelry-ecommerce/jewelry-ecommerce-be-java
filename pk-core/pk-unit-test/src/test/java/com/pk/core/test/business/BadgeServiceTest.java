@@ -7,6 +7,7 @@ import com.pk.core.business.repository.CollectionRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
 import com.pk.core.business.repository.PromotionRepo;
+import com.pk.core.business.service.PreOrderScope;
 import com.pk.core.business.service.PreOrderService;
 import com.pk.core.business.service.impl.BadgeServiceImpl;
 import com.pk.core.common.exception.BusinessException;
@@ -94,7 +95,7 @@ class BadgeServiceTest {
     private void stub(List<BadgeTemplateEntity> t, List<BadgeFlowEntity> f, boolean preOrderEnabled) {
         when(templates.findAll(any(Sort.class))).thenReturn(t);
         when(flows.findAll(any(Sort.class))).thenReturn(f);
-        when(preOrder.isEnabled()).thenReturn(preOrderEnabled);
+        when(preOrder.scope()).thenReturn(PreOrderScope.all(preOrderEnabled));
     }
 
     private String onlyBadgeCode(List<SkuBadgeResponseDto> res) {
@@ -192,5 +193,68 @@ class BadgeServiceTest {
                 List.of(new BadgeFlowTemplateRefDto("99", 1, false)));
 
         assertThrows(BusinessException.class, () -> service.createFlow(req));
+    }
+
+    private void stubScope(PreOrderScope scope, List<BadgeTemplateEntity> t, List<BadgeFlowEntity> f) {
+        when(templates.findAll(any(Sort.class))).thenReturn(t);
+        when(flows.findAll(any(Sort.class))).thenReturn(f);
+        when(preOrder.scope()).thenReturn(scope);
+    }
+
+    private static final List<BadgeTemplateEntity> ALL_TYPES = List.of(template(1, "PRE", "PRE_ORDER", 5),
+            template(2, "OOS", "OUT_OF_STOCK", 5), template(3, "SALE", "CAMPAIGN", 5));
+
+    @Test
+    void scopedPreOrderSkuShowsPreOrderEvenWhenInStock() {
+        stubScope(new PreOrderScope(true, PreOrderScope.SKU, java.util.Set.of(7L)), ALL_TYPES,
+                List.of(flow(11, "ALL", null, "[" + ref(3, 1, false) + "]")));
+        when(productSkus.findOne(7L)).thenReturn(sku(7, 100, 5)); // còn hàng nhưng nằm trong cấu hình đặt trước
+        when(products.findOne(100L)).thenReturn(null);
+
+        assertEquals("PRE", onlyBadgeCode(service.forSkus(List.of("7"), null)));
+    }
+
+    @Test
+    void outOfStockSkuOutsideScopedPreOrderGetsOutOfStockNotPreOrder() {
+        stubScope(new PreOrderScope(true, PreOrderScope.SKU, java.util.Set.of(7L)), ALL_TYPES, List.of());
+        when(productSkus.findOne(8L)).thenReturn(sku(8, 100, 0));
+        when(products.findOne(100L)).thenReturn(null);
+
+        assertEquals("OOS", onlyBadgeCode(service.forSkus(List.of("8"), null)));
+    }
+
+    @Test
+    void preOrderBeatsOutOfStockBeatsCampaign() {
+        BadgeFlowEntity campaign = flow(11, "ALL", null, "[" + ref(3, 99, true) + "]");
+        // 1) hết hàng + trong phạm vi -> PRE (dù campaign được ghim)
+        stubScope(new PreOrderScope(true, PreOrderScope.PRODUCT, java.util.Set.of(100L)), ALL_TYPES, List.of(campaign));
+        when(productSkus.findOne(7L)).thenReturn(sku(7, 100, 0));
+        when(products.findOne(100L)).thenReturn(null);
+        assertEquals("PRE", onlyBadgeCode(service.forSkus(List.of("7"), null)));
+        // 2) hết hàng + ngoài phạm vi -> OOS (campaign không hiện cho SKU hết hàng)
+        when(productSkus.findOne(8L)).thenReturn(sku(8, 200, 0));
+        when(products.findOne(200L)).thenReturn(null);
+        assertEquals("OOS", onlyBadgeCode(service.forSkus(List.of("8"), null)));
+        // 3) còn hàng + ngoài phạm vi -> CAMPAIGN
+        when(productSkus.findOne(9L)).thenReturn(sku(9, 200, 3));
+        assertEquals("SALE", onlyBadgeCode(service.forSkus(List.of("9"), null)));
+    }
+
+    @Test
+    void scopedPreOrderWithoutPreOrderTemplateFallsBackToCampaignWhenInStock() {
+        stubScope(new PreOrderScope(true, PreOrderScope.SKU, java.util.Set.of(7L)),
+                List.of(template(3, "SALE", "CAMPAIGN", 5)), List.of(flow(11, "ALL", null, "[" + ref(3, 1, false) + "]")));
+        when(productSkus.findOne(7L)).thenReturn(sku(7, 100, 5));
+        when(products.findOne(100L)).thenReturn(null);
+
+        assertEquals("SALE", onlyBadgeCode(service.forSkus(List.of("7"), null)));
+    }
+
+    @Test
+    void disabledPreOrderNeverLabelsPreOrder() {
+        stubScope(PreOrderScope.off(), ALL_TYPES, List.of());
+        when(productSkus.findOne(7L)).thenReturn(sku(7, 100, 0));
+
+        assertEquals("OOS", onlyBadgeCode(service.forSkus(List.of("7"), null)));
     }
 }

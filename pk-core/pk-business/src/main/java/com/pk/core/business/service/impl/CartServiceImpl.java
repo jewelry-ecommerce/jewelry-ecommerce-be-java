@@ -100,7 +100,7 @@ public class CartServiceImpl implements CartService {
         Outcome outcome = new Outcome();
         for (Map.Entry<Long, Integer> line : qtyBySku.entrySet()) {
             ProductSkuEntity sku = productSkus.findOne(line.getKey());
-            if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+            if (!sellable(sku)) {
                 outcome.note("NOT_FOUND", "Sản phẩm không còn tồn tại");
                 continue;
             }
@@ -119,7 +119,7 @@ public class CartServiceImpl implements CartService {
         CartEntity cart = findOrCreateCart(userId, guestId);
         Outcome outcome = new Outcome();
         ProductSkuEntity sku = productSkus.findOne(skuId);
-        if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+        if (!sellable(sku)) {
             outcome.note("NOT_FOUND", "Sản phẩm không còn tồn tại");
         } else {
             addCapped(cart.getId(), sku, req.getQuantity(), outcome, true);
@@ -149,7 +149,7 @@ public class CartServiceImpl implements CartService {
         if (guestCart != null) {
             for (CartItemEntity line : cartItems.findByCartId(guestCart.getId())) {
                 ProductSkuEntity sku = productSkus.findOne(line.getSkuId());
-                if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+                if (!sellable(sku)) {
                     outcome.note("NOT_FOUND", "Sản phẩm không còn tồn tại");
                     continue;
                 }
@@ -174,7 +174,7 @@ public class CartServiceImpl implements CartService {
         BigDecimal promotionDiscount = BigDecimal.ZERO;
         for (Map.Entry<Long, Integer> line : qtyBySku.entrySet()) {
             ProductSkuEntity sku = productSkus.findOne(line.getKey());
-            if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+            if (!sellable(sku)) {
                 throw new ResourceNotFoundException("Sản phẩm", "ProductSku", line.getKey());
             }
             BigDecimal qty = BigDecimal.valueOf(line.getValue());
@@ -259,7 +259,7 @@ public class CartServiceImpl implements CartService {
     private void addCapped(Long cartId, ProductSkuEntity sku, int qty, Outcome outcome, boolean absolute) {
         int available = sku.available();
         // Đặt trước đang bật: SKU hết hàng vẫn thêm được vào giỏ (không chặn số lượng).
-        boolean preOrderLine = available <= 0 && preOrder.isEnabled();
+        boolean preOrderLine = available <= 0 && preOrder.appliesTo(sku);
         if (available <= 0 && !preOrderLine) {
             outcome.note("OUT_OF_STOCK", "Sản phẩm \"" + sku.getName() + "\" đã hết hàng");
             return;
@@ -289,6 +289,15 @@ public class CartServiceImpl implements CartService {
                 outcome.reason, outcome.message);
     }
 
+    /** SKU bán được: SKU PUBLISHED và sản phẩm cha còn tồn tại, chưa xóa, đang PUBLISHED. */
+    private boolean sellable(ProductSkuEntity sku) {
+        if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+            return false;
+        }
+        ProductEntity product = products.findOne(sku.getProductId());
+        return product != null && product.isSellable();
+    }
+
     private CartLineResponseDto toLine(CartItemEntity item) {
         ProductSkuEntity sku = productSkus.findOne(item.getSkuId());
         if (sku == null) {
@@ -301,7 +310,7 @@ public class CartServiceImpl implements CartService {
         return new CartLineResponseDto(String.valueOf(item.getId()), true,
                 product != null ? product.getName() : sku.getName(),
                 product != null ? product.getSlug() : null,
-                sku.getSkuCode(), sku.getStatus(), String.valueOf(sku.getProductId()),
+                sku.getSkuCode(), sellable(sku) ? sku.getStatus() : "UNPUBLISHED", String.valueOf(sku.getProductId()),
                 String.valueOf(sku.getId()), item.getQuantity(),
                 sku.getListPrice().longValue(), sku.effectivePrice().longValue(),
                 sku.available(), sku.stockStatus(), productDto);

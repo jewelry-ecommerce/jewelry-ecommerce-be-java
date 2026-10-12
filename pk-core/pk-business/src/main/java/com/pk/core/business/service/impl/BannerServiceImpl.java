@@ -42,6 +42,10 @@ public class BannerServiceImpl implements BannerService {
     private final BannerPlacementRepo placements;
     private final ObjectMapper objectMapper;
 
+    /** Field-injection (không vào constructor) để unit test dựng service 3 tham số; null = luôn render kiểu cũ. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private BannerLayoutSupport layoutSupport;
+
     @Transactional(readOnly = true)
     @Override
     public BannerPageResponseDto findAll(int page, int take, String status, String mediaType, String actionType,
@@ -109,15 +113,36 @@ public class BannerServiceImpl implements BannerService {
 
     @Transactional(readOnly = true)
     @Override
-    public BannerPlacementRenderResponseDto renderByPlacementCode(String code) {
+    public BannerPlacementRenderResponseDto renderByPlacementCode(String code, String platform) {
         BannerPlacementEntity placement = blank(code) ? null : placements.findByCode(code.trim().toUpperCase(Locale.ROOT));
         if (placement == null) {
             throw new ResourceNotFoundException("Vị trí banner", "BannerPlacement", code);
         }
+        boolean hidden = "INACTIVE".equals(placement.getStatus())
+                || (!blank(platform) && !"ALL".equals(placement.getPlatform())
+                && !platform.trim().equalsIgnoreCase(placement.getPlatform()));
+        if (hidden) {
+            return emptyRender(placement);
+        }
+        if (layoutSupport != null) {
+            BannerPlacementRenderResponseDto fromLayout = layoutSupport.render(placement);
+            if (fromLayout != null) {
+                return fromLayout;
+            }
+        }
         List<BannerResponseDto> list = banners.findActiveByPlacementCode(placement.getCode()).stream()
                 .map(this::toDto).toList();
-        return new BannerPlacementRenderResponseDto(placement.getCode(), placement.getName(),
-                placement.getDisplayType(), list);
+        BannerPlacementRenderResponseDto dto = new BannerPlacementRenderResponseDto(placement.getCode(),
+                placement.getName(), placement.getDisplayType(), list);
+        dto.setPlatform(placement.getPlatform());
+        return dto;
+    }
+
+    private BannerPlacementRenderResponseDto emptyRender(BannerPlacementEntity placement) {
+        BannerPlacementRenderResponseDto dto = new BannerPlacementRenderResponseDto(placement.getCode(),
+                placement.getName(), placement.getDisplayType(), new ArrayList<>());
+        dto.setPlatform(placement.getPlatform());
+        return dto;
     }
 
     // ------------------------------------------------------------------ helpers

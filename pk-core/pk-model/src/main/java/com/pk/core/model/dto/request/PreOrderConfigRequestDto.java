@@ -7,11 +7,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 /** POST /admin/pre-orders (spec FE: {enabled (bắt buộc), message}). */
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class PreOrderConfigRequestDto {
 
     @NotNull
@@ -19,4 +20,15 @@ public class PreOrderConfigRequestDto {
 
     @Size(max = 500)
     private String message;
+
+    /** ALL (mặc định: mọi SKU hết hàng đặt trước được) | SKU | PRODUCT | CATEGORY | COLLECTION. */
+    private String scopeType;
+
+    /** Bắt buộc (không rỗng, tối đa 200) khi scopeType khác ALL; phải bỏ trống khi ALL. */
+    private List<Long> scopeIds;
+
+    public PreOrderConfigRequestDto(Boolean enabled, String message) {
+        this.enabled = enabled;
+        this.message = message;
+    }
 }

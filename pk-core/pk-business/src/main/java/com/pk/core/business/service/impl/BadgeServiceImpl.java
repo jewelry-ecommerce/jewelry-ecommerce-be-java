@@ -13,6 +13,7 @@ import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
 import com.pk.core.business.repository.PromotionRepo;
 import com.pk.core.business.service.BadgeService;
+import com.pk.core.business.service.PreOrderScope;
 import com.pk.core.business.service.PreOrderService;
 import com.pk.core.common.exception.BusinessException;
 import com.pk.core.common.exception.ErrorCode;
@@ -69,7 +70,7 @@ public class BadgeServiceImpl implements BadgeService {
     // ============================== Storefront ==============================
 
     /** Dữ liệu cấu hình nạp 1 lần cho cả request. */
-    private record Config(Date now, String channel, boolean preOrderEnabled,
+    private record Config(Date now, String channel, PreOrderScope preOrderScope,
                           List<BadgeTemplateEntity> activeTemplates, Map<Long, BadgeTemplateEntity> templateById,
                           List<FlowView> flows) {
     }
@@ -131,15 +132,40 @@ public class BadgeServiceImpl implements BadgeService {
             }
             views.add(new FlowView(f, readTree(f.getRuleConfig()), readRefs(f.getTemplates())));
         }
-        return new Config(now, ch, preOrder.isEnabled(), active, byId, views);
+        PreOrderScope scope = preOrder.scope();
+        return new Config(now, ch, scope == null ? PreOrderScope.off() : scope, active, byId, views);
     }
 
-    /** Áp quy tắc PRE_ORDER -> OUT_OF_STOCK -> CAMPAIGN, trả đúng 1 mẫu (hoặc null). */
+    /**
+     * Áp quy tắc ưu tiên PRE_ORDER -> OUT_OF_STOCK -> CAMPAIGN, trả đúng 1 mẫu (hoặc null).
+     * PRE_ORDER: SKU nằm trong phạm vi đặt trước đang cấu hình (kể cả còn hàng); cấu hình phạm vi ALL (cũ) thì chỉ SKU hết hàng.
+     * OUT_OF_STOCK: tự động theo tồn kho thật (available <= 0). CAMPAIGN: chỉ cho SKU còn hàng.
+     */
     private BadgeTemplateEntity pickFor(Config config, ProductSkuEntity sku) {
-        if (sku.available() <= 0) {
-            String wanted = config.preOrderEnabled() ? BadgeTemplateEntity.BADGE_PRE_ORDER
-                    : BadgeTemplateEntity.BADGE_OUT_OF_STOCK;
-            return pickStockBadge(config, wanted);
+        boolean outOfStock = sku.available() <= 0;
+        PreOrderScope scope = config.preOrderScope();
+        boolean preOrderItem;
+        if (!scope.enabled()) {
+            preOrderItem = false;
+        } else if (scope.isAll()) {
+            preOrderItem = outOfStock;
+        } else {
+            ProductEntity product = products.findOne(sku.getProductId());
+            Set<Long> collectionIds = new HashSet<>();
+            for (CollectionEntity c : collections.findByProductId(sku.getProductId())) {
+                collectionIds.add(c.getId());
+            }
+            preOrderItem = scope.covers(sku.getId(), sku.getProductId(), product == null ? null : product.getCategoryId(),
+                    collectionIds);
+        }
+        if (preOrderItem) {
+            BadgeTemplateEntity badge = pickStockBadge(config, BadgeTemplateEntity.BADGE_PRE_ORDER);
+            if (badge != null) {
+                return badge;
+            }
+        }
+        if (outOfStock) {
+            return pickStockBadge(config, BadgeTemplateEntity.BADGE_OUT_OF_STOCK);
         }
         return pickCampaignBadge(config, sku);
     }

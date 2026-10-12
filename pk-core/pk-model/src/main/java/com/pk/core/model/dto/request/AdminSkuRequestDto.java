@@ -35,6 +35,22 @@ public class AdminSkuRequestDto {
     private BigDecimal listPrice;
 
     private BigDecimal salePrice;
+    /** Giá vốn (admin-only), >= 0, null = chưa có. */
+    @PositiveOrZero(message = "Giá vốn không được âm")
+    private BigDecimal costPrice;
+    /** Giá bán sỉ B2B (admin-only), >= 0, null = chưa có. */
+    @PositiveOrZero(message = "Giá sỉ không được âm")
+    private BigDecimal b2bWholesalePrice;
+    /** Thuế suất riêng (%) 0..100, null = theo sản phẩm/mặc định. */
+    @jakarta.validation.constraints.DecimalMin("0")
+    @jakarta.validation.constraints.DecimalMax("100")
+    private BigDecimal taxRateOverride;
+    @PositiveOrZero
+    private BigDecimal length;
+    @PositiveOrZero
+    private BigDecimal width;
+    @PositiveOrZero
+    private BigDecimal height;
 
     @PositiveOrZero(message = "Tồn kho không được âm")
     private int onHand;

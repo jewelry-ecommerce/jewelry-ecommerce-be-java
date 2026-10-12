@@ -29,6 +29,14 @@ public class PreOrderConfigEntity extends CreateEntity {
     @Column(name = "message")
     private String message;
 
+    /** ALL (mặc định, hành vi cũ) | SKU | PRODUCT | CATEGORY | COLLECTION (V19). */
+    @Column(name = "scope_type")
+    private String scopeType = "ALL";
+
+    /** Id trong phạm vi, ngăn cách bởi dấu phẩy; null khi scopeType = ALL (V19). */
+    @Column(name = "scope_ids")
+    private String scopeIds;
+
     public PreOrderConfigEntity(boolean enabled, String message, Long createdBy) {
         this.enabled = enabled;
         this.message = message;

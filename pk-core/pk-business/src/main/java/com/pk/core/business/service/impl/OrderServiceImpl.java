@@ -19,6 +19,7 @@ import com.pk.core.common.exception.BusinessException;
 import com.pk.core.common.exception.ErrorCode;
 import com.pk.core.common.exception.ResourceNotFoundException;
 import com.pk.core.common.web.PageResponse;
+import com.pk.core.model.dto.request.AdminOrderReturnRequestDto;
 import com.pk.core.model.dto.request.AdminOrderStatusRequestDto;
 import com.pk.core.model.dto.request.GuestOrderRequestDto;
 import com.pk.core.model.dto.request.CreateOrderRequestDto;
@@ -128,11 +129,11 @@ public class OrderServiceImpl implements OrderService {
             int qty = line.getValue();
 
             ProductSkuEntity sku = productSkus.findOne(skuId);
-            if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+            if (!sellable(sku)) {
                 throw new ResourceNotFoundException("Sản phẩm", "ProductSku", skuId);
             }
             // Đặt trước đang bật và SKU đang hết hàng: nhận đơn đặt trước (reserved vượt on_hand, available âm).
-            boolean preOrderLine = sku.available() <= 0 && preOrder.isEnabled();
+            boolean preOrderLine = sku.available() <= 0 && preOrder.appliesTo(sku);
             int reserved = preOrderLine ? productSkus.reservePreOrderStock(skuId, qty)
                     : productSkus.reserveStock(skuId, qty);
             if (preOrderLine && reserved > 0) {
@@ -322,6 +323,13 @@ public class OrderServiceImpl implements OrderService {
 
         guardTransition(order, newStatus);
         order.setStatus(newStatus);
+        // DELIVERED: chốt xuất tồn đúng một lần (guardTransition đã chặn giao trùng) - on_hand và reserved cùng giảm.
+        if (OrderEntity.DELIVERED.equals(newStatus) && !order.isStockFulfilled()) {
+            for (OrderItemEntity item : orderItems.findByOrderId(order.getId())) {
+                productSkus.fulfillStock(item.getSkuId(), item.getQuantity());
+            }
+            order.setStockFulfilled(true);
+        }
         // COD: shipper thu tiền khi giao -> ghi nhận đã thanh toán lúc đơn sang DELIVERED.
         boolean codCollected = OrderEntity.DELIVERED.equals(newStatus)
                 && "COD".equalsIgnoreCase(order.getPaymentMethod())
@@ -383,7 +391,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Transactional
     @Override
-    public OrderResponseDto returnOrder(String code, List<Long> lineIds) {
+    public OrderResponseDto returnOrder(String code, AdminOrderReturnRequestDto request) {
         OrderEntity order = orders.findByCode(code);
         if (order == null) {
             throw new ResourceNotFoundException("Đơn hàng", "Order", code);
@@ -394,28 +402,70 @@ public class OrderServiceImpl implements OrderService {
                     order.getStatus(), OrderEntity.RETURNED);
         }
 
-        List<OrderItemEntity> returnedItems = orderItems.findByOrderId(order.getId()).stream()
-                .filter(item -> lineIds.contains(item.getId()))
-                .toList();
-        if (returnedItems.isEmpty()) {
-            throw BusinessException.badRequest(ErrorCode.NOT_FOUND,
-                    "Không tìm thấy dòng hàng khớp lineIds trong đơn " + code);
+        // lineId -> số lượng muốn trả (-1 = toàn bộ số còn lại, dùng cho cách cũ `lineIds`).
+        Map<Long, Integer> wanted = new LinkedHashMap<>();
+        if (request.getLines() != null) {
+            for (AdminOrderReturnRequestDto.Line l : request.getLines()) {
+                wanted.merge(l.getLineId(), l.getQuantity(), Integer::sum);
+            }
         }
-        // Nhả lại phần tồn kho đã giữ chỗ (reserved) của CÁC DÒNG được hoàn trả - xem
-        // ProductSkuRepo.releaseStock javadoc (mô hình hiện tại chưa có bước "chốt" on_hand lúc giao
-        // hàng nên reserved vẫn còn giữ tới lúc này, giống hệt lúc huỷ đơn).
-        for (OrderItemEntity item : returnedItems) {
-            productSkus.releaseStock(item.getSkuId(), item.getQuantity());
+        if (request.getLineIds() != null) {
+            for (Long id : request.getLineIds()) {
+                wanted.putIfAbsent(id, -1);
+            }
+        }
+        if (wanted.isEmpty()) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Cần lines hoặc lineIds để hoàn trả");
         }
 
-        order.markReturned();
-        order.touch();
-        orders.update(order);
+        Map<Long, OrderItemEntity> byId = new LinkedHashMap<>();
+        for (OrderItemEntity item : orderItems.findByOrderId(order.getId())) {
+            byId.put(item.getId(), item);
+        }
+        // Kiểm tra TOÀN BỘ trước khi ghi.
+        Map<Long, Integer> toReturn = new LinkedHashMap<>();
+        for (Map.Entry<Long, Integer> e : wanted.entrySet()) {
+            OrderItemEntity item = byId.get(e.getKey());
+            if (item == null) {
+                throw BusinessException.badRequest(ErrorCode.NOT_FOUND,
+                        "Không tìm thấy dòng hàng " + e.getKey() + " trong đơn " + code);
+            }
+            int remaining = item.getQuantity() - item.getReturnedQuantity();
+            int qty = e.getValue() == -1 ? remaining : e.getValue();
+            if (qty <= 0 || qty > remaining) {
+                throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                        "Dòng " + e.getKey() + " chỉ còn trả được " + remaining + " sản phẩm", remaining);
+            }
+            toReturn.put(e.getKey(), qty);
+        }
 
-        orderTimelines.create(new OrderTimelineEntity(order.getId(), OrderEntity.RETURNED,
-                "Hoàn trả " + returnedItems.size() + " dòng hàng (lineIds=" + lineIds + ")", "ADMIN"));
+        for (Map.Entry<Long, Integer> e : toReturn.entrySet()) {
+            OrderItemEntity item = byId.get(e.getKey());
+            int qty = e.getValue();
+            // CAS: hai request trả trùng cùng lúc thì request sau bị từ chối (rollback cả transaction).
+            if (orderItems.addReturned(item.getId(), qty) == 0) {
+                throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
+                        "Dòng " + item.getId() + " vừa được hoàn trả bởi thao tác khác, vui lòng tải lại",
+                        order.getStatus(), OrderEntity.RETURNED);
+            }
+            // Đã chốt xuất tồn lúc giao -> hàng trả về cộng lại on_hand; đơn cũ chưa chốt -> nhả reserved như trước.
+            if (order.isStockFulfilled()) {
+                productSkus.adjustOnHand(item.getSkuId(), qty);
+            } else {
+                productSkus.releaseStock(item.getSkuId(), qty);
+            }
+        }
 
-        return toDto(order);
+        boolean allReturned = orderItems.findByOrderId(order.getId()).stream()
+                .allMatch(i -> i.getReturnedQuantity() >= i.getQuantity());
+        int units = toReturn.values().stream().mapToInt(Integer::intValue).sum();
+        String note = "Hoàn trả " + units + " sản phẩm (" + toReturn + ")" + (allReturned ? " - đã trả hết đơn" : " - trả một phần");
+        if (allReturned) {
+            orders.updateStatusIfCurrent(order.getId(), OrderEntity.DELIVERED, OrderEntity.RETURNED);
+            order.markReturned();
+        }
+        orderTimelines.create(new OrderTimelineEntity(order.getId(), order.getStatus(), note, "ADMIN"));
+        return toDto(orders.findOne(order.getId()));
     }
 
     @Transactional
@@ -425,25 +475,32 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             throw new ResourceNotFoundException("Đơn hàng", "Order", code);
         }
+        if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 0) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "Số tiền hoàn phải là số nguyên dương (VND)");
+        }
         if (!OrderEntity.PAID.equals(order.getPaymentStatus())) {
             throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
-                    "Chỉ hoàn tiền được đơn đã thanh toán (paymentStatus hiện tại: "
+                    "Chỉ hoàn tiền được đơn đã thanh toán và chưa hoàn đủ (paymentStatus hiện tại: "
                             + order.getPaymentStatus() + ")",
                     order.getPaymentStatus(), OrderEntity.REFUNDED);
         }
-
-        if (amount != null && amount.compareTo(order.getGrandTotal()) > 0) {
+        BigDecimal refundable = order.getGrandTotal().subtract(order.getRefundedAmount());
+        if (amount.compareTo(refundable) > 0) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
-                    "Số tiền hoàn (" + amount + ") vượt tổng giá trị đơn (" + order.getGrandTotal() + ")");
+                    "Số tiền hoàn (" + amount + ") vượt số còn hoàn được (" + refundable + ")", refundable);
         }
-        order.setPaymentStatus(OrderEntity.REFUNDED);
-        order.touch();
-        orders.update(order);
-
-        orderTimelines.create(new OrderTimelineEntity(order.getId(), order.getStatus(),
-                "Hoàn tiền " + amount + " - Lý do: " + reason, "ADMIN"));
-
-        return toDto(order);
+        // CAS: hai lần hoàn đồng thời không thể cùng vượt tổng đơn. Hoàn đủ -> REFUNDED, một phần -> vẫn PAID.
+        if (orders.addRefund(order.getId(), amount) == 0) {
+            throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
+                    "Đơn hàng " + order.getCode() + " vừa được hoàn tiền bởi thao tác khác, vui lòng tải lại",
+                    order.getPaymentStatus(), OrderEntity.REFUNDED);
+        }
+        OrderEntity fresh = orders.findOne(order.getId());
+        orderTimelines.create(new OrderTimelineEntity(order.getId(), fresh.getStatus(),
+                "Hoàn tiền " + amount + " (đã hoàn " + fresh.getRefundedAmount() + "/" + fresh.getGrandTotal() + ") - Lý do: " + reason,
+                "ADMIN"));
+        return toDto(fresh);
     }
 
     /** Nhả tồn đã giữ chỗ và trả lượt dùng voucher (nếu đơn có áp voucher) khi đơn bị huỷ. */
@@ -463,5 +520,14 @@ public class OrderServiceImpl implements OrderService {
                     "Đơn hàng " + order.getCode() + " vừa được cập nhật bởi thao tác khác, vui lòng tải lại",
                     order.getStatus(), toStatus);
         }
+    }
+
+    /** SKU bán được: SKU PUBLISHED và sản phẩm cha còn tồn tại, chưa xóa, đang PUBLISHED. */
+    private boolean sellable(ProductSkuEntity sku) {
+        if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+            return false;
+        }
+        ProductEntity product = products.findOne(sku.getProductId());
+        return product != null && product.isSellable();
     }
 }

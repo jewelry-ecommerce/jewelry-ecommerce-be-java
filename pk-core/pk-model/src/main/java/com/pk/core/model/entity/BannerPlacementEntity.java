@@ -11,7 +11,7 @@ import vn.com.unit.miragesql.miragesql.annotation.PrimaryKey;
 import vn.com.unit.miragesql.miragesql.annotation.PrimaryKey.GenerationType;
 import vn.com.unit.miragesql.miragesql.annotation.Table;
 
-/** Vị trí hiển thị banner (VD HOME_HERO). Dữ liệu tham chiếu seed sẵn (V6/Data.sql), spec FE không có API quản lý. */
+/** Vị trí hiển thị banner (VD HOME_HERO). Seed sẵn ở V6; quản lý qua /admin/banner/placements (V14/V17 thêm platform, status, settings). */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -31,4 +31,16 @@ public class BannerPlacementEntity extends CreateEntity {
 
     @Column(name = "display_type")
     private String displayType;
+
+    /** WEB | APP | ALL (V17). */
+    @Column(name = "platform")
+    private String platform = "ALL";
+
+    /** ACTIVE | INACTIVE (V17); INACTIVE thì storefront không render banner. */
+    @Column(name = "status")
+    private String status = "ACTIVE";
+
+    /** JSON {columns, rows, gap, mobileOddFullWidthItem} (V17), null = không cấu hình. */
+    @Column(name = "settings")
+    private String settings;
 }

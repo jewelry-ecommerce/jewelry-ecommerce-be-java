@@ -14,7 +14,10 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class AdminUpdateProductRequestDto {
+public class AdminUpdateProductRequestDto extends AdminProductExtraRequestDto {
+
+    /** Tuỳ chọn: nếu gửi thì phải đúng mã hiện tại (mã sản phẩm không đổi được; khác -> 400 CODE_IMMUTABLE). */
+    private String code;
 
     @NotNull(message = "Danh mục không được để trống")
     private Long categoryId;

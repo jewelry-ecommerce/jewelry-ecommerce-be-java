@@ -58,6 +58,35 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "thumbnail_url")
     private String thumbnailUrl;
 
+    /** EACH | STRAND | PAIR | SET | BOX | BAG | SHEET (V18). */
+    @Column(name = "unit_of_measure")
+    private String unitOfMeasure = "EACH";
+
+    /** Thuế suất riêng (%), null = theo mặc định (V18). */
+    @Column(name = "tax_rate_override")
+    private BigDecimal taxRateOverride;
+
+    @Column(name = "weight_gram")
+    private BigDecimal weightGram;
+
+    @Column(name = "length")
+    private BigDecimal length;
+
+    @Column(name = "width")
+    private BigDecimal width;
+
+    @Column(name = "height")
+    private BigDecimal height;
+
+    @Column(name = "meta_title")
+    private String metaTitle;
+
+    @Column(name = "meta_description")
+    private String metaDescription;
+
+    @Column(name = "meta_keywords")
+    private String metaKeywords;
+
     @Column(name = "base_price")
     private BigDecimal basePrice = BigDecimal.ZERO;
 
@@ -80,6 +109,11 @@ public class ProductEntity extends BaseEntity {
     public void publish() {
         this.status = PUBLISHED;
         this.publishedAt = new Date();
+    }
+
+    /** Có thể bán: sản phẩm chưa bị xóa mềm và đang PUBLISHED (unpublish/archive/xóa thì SKU con cũng ngừng bán). */
+    public boolean isSellable() {
+        return getDeletedDate() == null && PUBLISHED.equals(status);
     }
 
     public boolean isPublished() {

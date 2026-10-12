@@ -1,6 +1,5 @@
 package com.pk.core.model.dto.request;
 
-import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,6 +16,21 @@ import java.util.List;
 @AllArgsConstructor
 public class AdminOrderReturnRequestDto {
 
-    @NotEmpty(message = "Danh sách dòng hàng hoàn trả không được để trống")
+    /** Cách cũ: trả TOÀN BỘ số lượng còn lại của các dòng này. Dùng `lines` nếu cần trả một phần số lượng. */
     private List<Long> lineIds;
+
+    /** Trả theo số lượng từng dòng: [{lineId, quantity}]. */
+    @jakarta.validation.Valid
+    private List<Line> lines;
+
+    @lombok.Getter
+    @lombok.Setter
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class Line {
+        @jakarta.validation.constraints.NotNull
+        private Long lineId;
+        @jakarta.validation.constraints.Min(1)
+        private int quantity;
+    }
 }

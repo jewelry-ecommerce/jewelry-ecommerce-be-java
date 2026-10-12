@@ -51,6 +51,10 @@ public class OrderItemEntity extends CreateEntity {
     @Column(name = "line_total")
     private BigDecimal lineTotal;
 
+    /** Số lượng đã trả lại của dòng này (0..quantity). */
+    @Column(name = "returned_quantity")
+    private int returnedQuantity;
+
     public OrderItemEntity(Long orderId, Long productId, Long skuId, String name, String imageUrl,
                             int quantity, BigDecimal unitPrice) {
         this.orderId = orderId;

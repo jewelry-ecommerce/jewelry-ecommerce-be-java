@@ -66,6 +66,27 @@ public class ProductSkuEntity extends BaseEntity {
     @Column(name = "sale_price")
     private BigDecimal salePrice;
 
+    /** Giá vốn (admin-only, V18). */
+    @Column(name = "cost_price")
+    private BigDecimal costPrice;
+
+    /** Giá bán sỉ B2B (admin-only, V18). */
+    @Column(name = "b2b_wholesale_price")
+    private BigDecimal b2bWholesalePrice;
+
+    /** Thuế suất riêng (%) của SKU, null = theo sản phẩm/mặc định (V18). */
+    @Column(name = "tax_rate_override")
+    private BigDecimal taxRateOverride;
+
+    @Column(name = "length")
+    private BigDecimal length;
+
+    @Column(name = "width")
+    private BigDecimal width;
+
+    @Column(name = "height")
+    private BigDecimal height;
+
     @Column(name = "on_hand")
     private int onHand;
 

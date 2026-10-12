@@ -29,5 +29,13 @@ public interface BannerService {
     void delete(Long id);
 
     /** GET /storefront/banner/placements/code/{code}/render - banner ACTIVE của vị trí; mã lạ -> 404. */
-    BannerPlacementRenderResponseDto renderByPlacementCode(String code);
+    default BannerPlacementRenderResponseDto renderByPlacementCode(String code) {
+        return renderByPlacementCode(code, null);
+    }
+
+    /**
+     * Như trên; platform (WEB | APP, null = không lọc): vị trí có platform khác (không phải ALL) hoặc status INACTIVE
+     * thì trả về không có banner/slot. Vị trí có layout -> slot thật từ layout hiệu lực; chưa có layout -> một slot "main".
+     */
+    BannerPlacementRenderResponseDto renderByPlacementCode(String code, String platform);
 }

@@ -103,6 +103,14 @@ public class OrderEntity extends UpdateEntity {
     @Column(name = "applied_voucher_code")
     private String appliedVoucherCode;
 
+    /** Đã chốt xuất tồn (on_hand -= qty, reserved -= qty) khi giao - đúng một lần. */
+    @Column(name = "stock_fulfilled")
+    private boolean stockFulfilled;
+
+    /** Tổng tiền đã hoàn (ghi nhận hoàn tiền cơ bản, chưa chuyển tiền qua cổng). */
+    @Column(name = "refunded_amount")
+    private BigDecimal refundedAmount = BigDecimal.ZERO;
+
     @Column(name = "note")
     private String note;
 

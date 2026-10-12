@@ -95,7 +95,7 @@ public class AdminOrderRest extends AbstractRest {
                                 @Valid @RequestBody AdminOrderReturnRequestDto request,
                                 HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(orderService.returnOrder(orderCode, request.getLineIds()));
+            return restSuccessHandle.handleSuccess(orderService.returnOrder(orderCode, request));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

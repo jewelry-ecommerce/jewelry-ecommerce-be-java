@@ -23,9 +23,13 @@ CREATE SEQUENCE carts_id_seq START WITH 1;
 CREATE SEQUENCE cart_items_id_seq START WITH 1;
 CREATE SEQUENCE sku_attribute_values_id_seq START WITH 1;
 CREATE SEQUENCE product_media_id_seq START WITH 1;
+CREATE SEQUENCE product_infos_id_seq START WITH 1;
+CREATE SEQUENCE product_mix_matches_id_seq START WITH 1;
 CREATE SEQUENCE wishlist_items_id_seq START WITH 1;
 CREATE SEQUENCE banner_placements_id_seq START WITH 1;
 CREATE SEQUENCE banners_id_seq START WITH 1;
+CREATE SEQUENCE banner_placement_layouts_id_seq START WITH 1;
+CREATE SEQUENCE banner_placement_layout_items_id_seq START WITH 1;
 CREATE SEQUENCE customer_requests_id_seq START WITH 1;
 CREATE SEQUENCE pre_order_configs_id_seq START WITH 1;
 
@@ -142,6 +146,15 @@ CREATE TABLE products (
     material          VARCHAR(80),
     occasion          VARCHAR(80),
     thumbnail_url     VARCHAR(500),
+    unit_of_measure   VARCHAR(20) NOT NULL DEFAULT 'EACH',
+    tax_rate_override NUMERIC(5, 2),
+    weight_gram       NUMERIC(10, 2),
+    length            NUMERIC(10, 2),
+    width             NUMERIC(10, 2),
+    height            NUMERIC(10, 2),
+    meta_title        VARCHAR(200),
+    meta_description  VARCHAR(500),
+    meta_keywords     VARCHAR(500),
     base_price        NUMERIC(15, 0) NOT NULL DEFAULT 0,
     status            VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
     published_at      TIMESTAMP,
@@ -152,6 +165,8 @@ CREATE TABLE products (
     updated_date      TIMESTAMP,
     deleted_id        BIGINT,
     deleted_date      TIMESTAMP,
+    CONSTRAINT ck_products_unit CHECK (unit_of_measure IN ('EACH', 'STRAND', 'PAIR', 'SET', 'BOX', 'BAG', 'SHEET')),
+    CONSTRAINT ck_products_tax CHECK (tax_rate_override IS NULL OR (tax_rate_override >= 0 AND tax_rate_override <= 100)),
     CONSTRAINT uq_products_code UNIQUE (code),
     CONSTRAINT uq_products_slug UNIQUE (slug),
     CONSTRAINT ck_products_price CHECK (base_price >= 0),
@@ -179,6 +194,12 @@ CREATE TABLE product_skus (
     weight_gram       NUMERIC(8, 2),
     list_price        NUMERIC(15, 0) NOT NULL,
     sale_price        NUMERIC(15, 0),
+    cost_price        NUMERIC(15, 0),
+    b2b_wholesale_price NUMERIC(15, 0),
+    tax_rate_override NUMERIC(5, 2),
+    length            NUMERIC(10, 2),
+    width             NUMERIC(10, 2),
+    height            NUMERIC(10, 2),
     on_hand           INTEGER NOT NULL DEFAULT 0,
     reserved          INTEGER NOT NULL DEFAULT 0,
     is_default        BOOLEAN NOT NULL DEFAULT FALSE,
@@ -189,6 +210,9 @@ CREATE TABLE product_skus (
     updated_date      TIMESTAMP,
     deleted_id        BIGINT,
     deleted_date      TIMESTAMP,
+    CONSTRAINT ck_product_skus_cost CHECK (cost_price IS NULL OR cost_price >= 0),
+    CONSTRAINT ck_product_skus_b2b CHECK (b2b_wholesale_price IS NULL OR b2b_wholesale_price >= 0),
+    CONSTRAINT ck_product_skus_tax CHECK (tax_rate_override IS NULL OR (tax_rate_override >= 0 AND tax_rate_override <= 100)),
     CONSTRAINT uq_product_skus_code UNIQUE (sku_code),
     CONSTRAINT ck_product_skus_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')),
     CONSTRAINT ck_product_skus_list_price CHECK (list_price >= 0),
@@ -220,6 +244,8 @@ CREATE TABLE orders (
     voucher_discount    NUMERIC(15, 0) NOT NULL DEFAULT 0,
     shipping_fee        NUMERIC(15, 0) NOT NULL DEFAULT 0,
     grand_total         NUMERIC(15, 0) NOT NULL,
+    stock_fulfilled     BOOLEAN NOT NULL DEFAULT FALSE,
+    refunded_amount     NUMERIC(15, 0) NOT NULL DEFAULT 0,
     applied_voucher_code VARCHAR(40),
     note                VARCHAR(500),
     placed_at           TIMESTAMP NOT NULL,
@@ -230,7 +256,8 @@ CREATE TABLE orders (
     CONSTRAINT uq_orders_code UNIQUE (code),
     CONSTRAINT ck_orders_status CHECK (status IN ('PENDING', 'CONFIRMED', 'SHIPPING', 'DELIVERED', 'CANCELLED', 'RETURNED')),
     CONSTRAINT ck_orders_payment_status CHECK (payment_status IN ('UNPAID', 'PAID', 'REFUNDED')),
-    CONSTRAINT ck_orders_grand_total CHECK (grand_total >= 0)
+    CONSTRAINT ck_orders_grand_total CHECK (grand_total >= 0),
+    CONSTRAINT ck_orders_refunded CHECK (refunded_amount >= 0)
 );
 
 CREATE TABLE order_items (
@@ -243,10 +270,12 @@ CREATE TABLE order_items (
     quantity     INTEGER NOT NULL,
     unit_price   NUMERIC(15, 0) NOT NULL,
     line_total   NUMERIC(15, 0) NOT NULL,
+    returned_quantity INTEGER NOT NULL DEFAULT 0,
     created_id   BIGINT,
     created_date TIMESTAMP NOT NULL,
     CONSTRAINT ck_order_items_quantity CHECK (quantity > 0),
-    CONSTRAINT ck_order_items_unit_price CHECK (unit_price >= 0)
+    CONSTRAINT ck_order_items_unit_price CHECK (unit_price >= 0),
+    CONSTRAINT ck_order_items_returned CHECK (returned_quantity >= 0 AND returned_quantity <= quantity)
 );
 
 CREATE TABLE order_timeline (
@@ -480,6 +509,29 @@ CREATE TABLE product_media (
     CONSTRAINT ck_product_media_type CHECK (media_type IN ('IMAGE', 'VIDEO'))
 );
 
+CREATE TABLE product_infos (
+    id            BIGINT PRIMARY KEY,
+    product_id    BIGINT NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+    title         VARCHAR(200),
+    description   VARCHAR(4000) NOT NULL,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL
+);
+CREATE INDEX ix_product_infos_product ON product_infos (product_id, sort_order);
+
+CREATE TABLE product_mix_matches (
+    id                  BIGINT PRIMARY KEY,
+    product_id          BIGINT NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+    related_product_id  BIGINT NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+    sort_order          INTEGER NOT NULL DEFAULT 0,
+    created_id          BIGINT,
+    created_date        TIMESTAMP NOT NULL,
+    CONSTRAINT uq_product_mix_matches UNIQUE (product_id, related_product_id),
+    CONSTRAINT ck_product_mix_matches_self CHECK (product_id <> related_product_id)
+);
+CREATE INDEX ix_product_mix_matches_product ON product_mix_matches (product_id, sort_order);
+
 CREATE TABLE sku_attribute_values (
     id            BIGINT PRIMARY KEY,
     sku_id        BIGINT NOT NULL REFERENCES product_skus (id) ON DELETE CASCADE,
@@ -519,6 +571,9 @@ CREATE TABLE banner_placements (
     code          VARCHAR(60) NOT NULL,
     name          VARCHAR(150) NOT NULL,
     display_type  VARCHAR(30) NOT NULL DEFAULT 'CAROUSEL',
+    platform      VARCHAR(10) NOT NULL DEFAULT 'ALL',
+    status        VARCHAR(10) NOT NULL DEFAULT 'ACTIVE',
+    settings      VARCHAR(2000),
     created_id    BIGINT,
     created_date  TIMESTAMP NOT NULL,
     CONSTRAINT uq_banner_placements_code UNIQUE (code)
@@ -552,6 +607,38 @@ CREATE TABLE banners (
     deleted_date             TIMESTAMP
 );
 
+CREATE TABLE banner_placement_layouts (
+    id            BIGINT PRIMARY KEY,
+    placement_id  BIGINT NOT NULL REFERENCES banner_placements (id) ON DELETE CASCADE,
+    name          VARCHAR(150) NOT NULL,
+    status        VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    active_from   TIMESTAMP,
+    active_to     TIMESTAMP,
+    note          VARCHAR(500),
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL,
+    updated_id    BIGINT,
+    updated_date  TIMESTAMP,
+    CONSTRAINT ck_banner_layouts_status CHECK (status IN ('DRAFT', 'SCHEDULED', 'ACTIVE', 'INACTIVE', 'ARCHIVED'))
+);
+CREATE INDEX ix_banner_layouts_placement ON banner_placement_layouts (placement_id, status);
+
+CREATE TABLE banner_placement_layout_items (
+    id                BIGINT PRIMARY KEY,
+    layout_id         BIGINT NOT NULL REFERENCES banner_placement_layouts (id) ON DELETE CASCADE,
+    slot_key          VARCHAR(60) NOT NULL,
+    banner_id         BIGINT NOT NULL REFERENCES banners (id),
+    is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+    priority          INTEGER NOT NULL DEFAULT 0,
+    display_metadata  VARCHAR(4000),
+    created_id        BIGINT,
+    created_date      TIMESTAMP NOT NULL,
+    updated_id        BIGINT,
+    updated_date      TIMESTAMP,
+    CONSTRAINT uq_banner_layout_items UNIQUE (layout_id, slot_key, banner_id)
+);
+CREATE INDEX ix_banner_layout_items_layout ON banner_placement_layout_items (layout_id, slot_key, priority);
+
 CREATE TABLE customer_requests (
     id                          BIGINT PRIMARY KEY,
     type                        VARCHAR(20) NOT NULL,
@@ -577,6 +664,9 @@ CREATE TABLE pre_order_configs (
     id            BIGINT PRIMARY KEY,
     enabled       BOOLEAN NOT NULL,
     message       VARCHAR(500),
+    scope_type    VARCHAR(20) NOT NULL DEFAULT 'ALL',
+    scope_ids     VARCHAR(2000),
     created_id    BIGINT,
-    created_date  TIMESTAMP NOT NULL
+    created_date  TIMESTAMP NOT NULL,
+    CONSTRAINT ck_pre_order_scope_type CHECK (scope_type IN ('ALL', 'SKU', 'PRODUCT', 'CATEGORY', 'COLLECTION'))
 );

@@ -8,7 +8,10 @@ import com.pk.core.business.web.AbstractRest;
 import com.pk.core.common.web.BaseRes;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.pk.core.business.service.BannerLayoutService;
 import com.pk.core.business.service.BannerPlacementService;
+import com.pk.core.model.dto.request.AdminBannerLayoutItemRequestDto;
+import com.pk.core.model.dto.request.AdminBannerLayoutRequestDto;
 import com.pk.core.business.service.BannerService;
 import com.pk.core.model.constant.admin.UrlAdminConstant;
 import com.pk.core.model.dto.request.AdminBannerPlacementRequestDto;
@@ -36,6 +39,7 @@ public class AdminBannerRest extends AbstractRest {
 
     private final BannerService bannerService;
     private final BannerPlacementService placementService;
+    private final BannerLayoutService layoutService;
 
     @GetMapping(UrlAdminConstant.Banner.BANNERS)
     public BaseRes list(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "20") int take,
@@ -117,6 +121,70 @@ public class AdminBannerRest extends AbstractRest {
                                    HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(placementService.update(id, request));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    // ---------- Banner builder: layout của vị trí (slot / toạ độ / thứ tự) ----------
+
+    @GetMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}/layouts")
+    public BaseRes listLayouts(@PathVariable Long id, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(layoutService.list(id));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @GetMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}/layouts/{layoutId}")
+    public BaseRes layoutDetail(@PathVariable Long id, @PathVariable Long layoutId,
+                                HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(layoutService.detail(id, layoutId));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PostMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}/layouts")
+    public BaseRes createLayout(@PathVariable Long id, @Valid @RequestBody AdminBannerLayoutRequestDto request,
+                                HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(layoutService.create(id, request));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PatchMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}/layouts/{layoutId}")
+    public BaseRes updateLayout(@PathVariable Long id, @PathVariable Long layoutId,
+                                @Valid @RequestBody AdminBannerLayoutRequestDto request,
+                                HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(layoutService.update(id, layoutId, request));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PatchMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}/layouts/{layoutId}/items/{itemId}")
+    public BaseRes patchLayoutItem(@PathVariable Long id, @PathVariable Long layoutId, @PathVariable Long itemId,
+                                   @RequestBody AdminBannerLayoutItemRequestDto request,
+                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(layoutService.patchItem(id, layoutId, itemId, request));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @DeleteMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}/layouts/{layoutId}/items/{itemId}")
+    public BaseRes deleteLayoutItem(@PathVariable Long id, @PathVariable Long layoutId, @PathVariable Long itemId,
+                                    HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            layoutService.deleteItem(id, layoutId, itemId);
+            return restSuccessHandle.handleSuccess(MessageResponseDto.ok("Đã gỡ banner khỏi slot (banner vẫn còn)"));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

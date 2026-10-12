@@ -74,11 +74,11 @@ public class CheckoutServiceImpl implements CheckoutService {
             int qty = line.getValue();
 
             ProductSkuEntity sku = productSkus.findOne(skuId);
-            if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+            if (!sellable(sku)) {
                 throw new ResourceNotFoundException("Sản phẩm", "ProductSku", skuId);
             }
             // Đặt trước đang bật thì SKU HẾT HÀNG vẫn báo giá được (đơn đặt trước).
-            boolean preOrderLine = sku.available() <= 0 && preOrder.isEnabled();
+            boolean preOrderLine = sku.available() <= 0 && preOrder.appliesTo(sku);
             if (sku.available() < qty && !preOrderLine) {
                 throw BusinessException.badRequest(ErrorCode.INSUFFICIENT_STOCK,
                         "Sản phẩm \"" + sku.getName() + "\" không đủ hàng, chỉ còn " + sku.available(),
@@ -122,5 +122,14 @@ public class CheckoutServiceImpl implements CheckoutService {
         int days = "EXPRESS".equalsIgnoreCase(shippingMethod) ? 2 : 5;
         cal.add(Calendar.DAY_OF_MONTH, days);
         return cal.getTime();
+    }
+
+    /** SKU bán được: SKU PUBLISHED và sản phẩm cha còn tồn tại, chưa xóa, đang PUBLISHED. */
+    private boolean sellable(ProductSkuEntity sku) {
+        if (sku == null || !ProductSkuEntity.PUBLISHED.equals(sku.getStatus())) {
+            return false;
+        }
+        ProductEntity product = products.findOne(sku.getProductId());
+        return product != null && product.isSellable();
     }
 }

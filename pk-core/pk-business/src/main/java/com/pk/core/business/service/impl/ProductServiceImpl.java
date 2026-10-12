@@ -5,7 +5,9 @@ import lombok.RequiredArgsConstructor;
 import com.pk.core.business.repository.CategoryRepo;
 import com.pk.core.business.repository.CollectionRepo;
 import com.pk.core.business.repository.ProductAttributeRepo;
+import com.pk.core.business.repository.ProductInfoRepo;
 import com.pk.core.business.repository.ProductMediaRepo;
+import com.pk.core.business.repository.ProductMixMatchRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
 import com.pk.core.business.repository.SkuAttributeValueRepo;
@@ -17,16 +19,21 @@ import com.pk.core.common.exception.ResourceNotFoundException;
 import com.pk.core.common.util.SlugUtil;
 import com.pk.core.common.web.PageResponse;
 import com.pk.core.model.dto.request.AdminCreateProductRequestDto;
+import com.pk.core.model.dto.request.AdminProductExtraRequestDto;
 import com.pk.core.model.dto.request.AdminSkuAttributesRequestDto;
 import com.pk.core.model.dto.request.AdminSkuRequestDto;
 import com.pk.core.model.dto.request.AdminUpdateProductRequestDto;
 import com.pk.core.model.dto.response.CategoryResponseDto;
 import com.pk.core.model.dto.response.CollectionResponseDto;
+import com.pk.core.model.dto.response.ProductInfoResponseDto;
 import com.pk.core.model.dto.response.ProductMediaResponseDto;
+import com.pk.core.model.dto.response.ProductMixMatchResponseDto;
 import com.pk.core.model.dto.response.ProductResponseDto;
 import com.pk.core.model.dto.response.ProductSkuResponseDto;
 import com.pk.core.model.entity.CategoryEntity;
 import com.pk.core.model.entity.ProductEntity;
+import com.pk.core.model.entity.ProductInfoEntity;
+import com.pk.core.model.entity.ProductMixMatchEntity;
 import com.pk.core.model.entity.ProductAttributeEntity;
 import com.pk.core.model.entity.ProductSkuEntity;
 import com.pk.core.model.entity.SkuAttributeValueEntity;
@@ -62,6 +69,8 @@ public class ProductServiceImpl implements ProductService {
     private final ProductAttributeRepo attributeDefs;
     private final SkuAttributeValueRepo skuAttributes;
     private final ProductMediaRepo productMedia;
+    private final ProductInfoRepo productInfos;
+    private final ProductMixMatchRepo mixMatches;
 
     @Transactional(readOnly = true)
     @Override
@@ -70,7 +79,14 @@ public class ProductServiceImpl implements ProductService {
         if (p == null || !p.isPublished()) {
             throw new ResourceNotFoundException("Sản phẩm", "Product", slug);
         }
-        return toDto(p);
+        ProductResponseDto dto = toDto(p);
+        // Trang chi tiết storefront: SEO + thông tin bổ sung + đơn vị tính (không có thuế/giá vốn/giá sỉ).
+        dto.setUnitOfMeasure(p.getUnitOfMeasure());
+        dto.setMetaTitle(p.getMetaTitle());
+        dto.setMetaDescription(p.getMetaDescription());
+        dto.setMetaKeywords(p.getMetaKeywords());
+        dto.setProductInfos(productInfos.findByProductId(p.getId()).stream().map(ProductInfoResponseDto::from).toList());
+        return dto;
     }
 
     @Transactional(readOnly = true)
@@ -167,7 +183,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductResponseDto findByIdForAdmin(Long productId) {
         ProductEntity p = requireProduct(productId);
-        return toAdminDto(p);
+        return withDetail(toAdminDto(p), p);
     }
 
     @Transactional
@@ -202,7 +218,11 @@ public class ProductServiceImpl implements ProductService {
         p.setMaterial(req.getMaterial());
         p.setOccasion(req.getOccasion());
         p.setThumbnailUrl(req.getThumbnailUrl());
+        applyPim(p, req, true);
+        validateMixMatch(null, req.getProductMixMatch());
         products.create(p);
+        saveInfos(p.getId(), req.getProductInfos());
+        saveMixMatch(p.getId(), req.getProductMixMatch());
 
         List<ProductSkuEntity> createdSkus = new ArrayList<>();
         for (AdminSkuRequestDto v : req.getVariants()) {
@@ -217,18 +237,24 @@ public class ProductServiceImpl implements ProductService {
             sku.setWeightGram(v.getWeightGram());
             sku.setSalePrice(v.getSalePrice());
             sku.setDefault(v.isDefault());
+            applySkuPim(sku, v);
             productSkus.create(sku);
             createdSkus.add(sku);
         }
         recalcBasePrice(p, createdSkus);
 
-        return toAdminDto(p, createdSkus);
+        return withDetail(toAdminDto(p, createdSkus), p);
     }
 
     @Transactional
     @Override
     public ProductResponseDto update(Long productId, AdminUpdateProductRequestDto req) {
         ProductEntity p = requireProduct(productId);
+        if (req.getCode() != null && !req.getCode().isBlank() && !req.getCode().trim().equals(p.getCode())) {
+            throw BusinessException.badRequest("CODE_IMMUTABLE",
+                    "Không đổi được mã sản phẩm (hiện là " + p.getCode() + ")", req.getCode());
+        }
+        validateMixMatch(productId, req.getProductMixMatch());
         p.setCategoryId(req.getCategoryId());
         p.setName(req.getName().trim());
         p.setShortDescription(req.getShortDescription());
@@ -236,9 +262,18 @@ public class ProductServiceImpl implements ProductService {
         p.setMaterial(req.getMaterial());
         p.setOccasion(req.getOccasion());
         p.setThumbnailUrl(req.getThumbnailUrl());
+        applyPim(p, req, false);
         p.touch();
         products.update(p);
-        return toAdminDto(p);
+        if (req.getProductInfos() != null) {
+            productInfos.deleteByProductId(productId);
+            saveInfos(productId, req.getProductInfos());
+        }
+        if (req.getProductMixMatch() != null) {
+            mixMatches.deleteByProductId(productId);
+            saveMixMatch(productId, req.getProductMixMatch());
+        }
+        return withDetail(toAdminDto(p), p);
     }
 
     @Transactional
@@ -297,7 +332,16 @@ public class ProductServiceImpl implements ProductService {
     private ProductResponseDto toAdminDto(ProductEntity p, List<ProductSkuEntity> skuEntities) {
         CategoryEntity category = p.getCategoryId() != null ? categories.findOne(p.getCategoryId()) : null;
 
-        List<ProductSkuResponseDto> skus = skuEntities.stream().map(ProductSkuResponseDto::from).toList();
+        List<ProductSkuResponseDto> skus = skuEntities.stream().map(sku -> {
+            ProductSkuResponseDto d = ProductSkuResponseDto.from(sku);
+            d.setCostPrice(sku.getCostPrice());
+            d.setB2bWholesalePrice(sku.getB2bWholesalePrice());
+            d.setTaxRateOverride(sku.getTaxRateOverride());
+            d.setLength(sku.getLength());
+            d.setWidth(sku.getWidth());
+            d.setHeight(sku.getHeight());
+            return d;
+        }).toList();
         attachBindings(p.getId(), skus);
 
         BigDecimal priceFrom = skuEntities.stream()
@@ -314,7 +358,120 @@ public class ProductServiceImpl implements ProductService {
                 skus, productCollections);
         dto.setCategorySlug(category != null ? category.getSlug() : null);
         dto.setMedia(productMedia.findByProductId(p.getId()).stream().map(ProductMediaResponseDto::from).toList());
+        dto.setUnitOfMeasure(p.getUnitOfMeasure());
+        dto.setTaxRateOverride(p.getTaxRateOverride());
+        dto.setWeightGram(p.getWeightGram());
+        dto.setLength(p.getLength());
+        dto.setWidth(p.getWidth());
+        dto.setHeight(p.getHeight());
+        dto.setMetaTitle(p.getMetaTitle());
+        dto.setMetaDescription(p.getMetaDescription());
+        dto.setMetaKeywords(p.getMetaKeywords());
         return dto;
+    }
+
+    /** Thêm productInfos + productMixMatch (chỉ ở chi tiết/tạo/sửa, tránh truy vấn thêm cho từng dòng danh sách). */
+    private ProductResponseDto withDetail(ProductResponseDto dto, ProductEntity p) {
+        dto.setProductInfos(productInfos.findByProductId(p.getId()).stream().map(ProductInfoResponseDto::from).toList());
+        List<ProductMixMatchResponseDto> mix = new ArrayList<>();
+        for (ProductMixMatchEntity m : mixMatches.findByProductId(p.getId())) {
+            ProductEntity related = products.findOne(m.getRelatedProductId());
+            if (related != null && related.getDeletedDate() == null) {
+                mix.add(ProductMixMatchResponseDto.from(related));
+            }
+        }
+        dto.setProductMixMatch(mix);
+        return dto;
+    }
+
+    private static final java.util.Set<String> UNITS = java.util.Set.of(
+            "EACH", "STRAND", "PAIR", "SET", "BOX", "BAG", "SHEET");
+
+    /** Ghi dữ liệu PIM mở rộng từ request vào sản phẩm (creating: unitOfMeasure null -> EACH; sửa: null -> giữ nguyên). */
+    private static void applyPim(ProductEntity p, AdminProductExtraRequestDto req, boolean creating) {
+        if (req.getUnitOfMeasure() != null && !req.getUnitOfMeasure().isBlank()) {
+            String u = req.getUnitOfMeasure().trim().toUpperCase();
+            if (!UNITS.contains(u)) {
+                throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                        "unitOfMeasure không hợp lệ: " + req.getUnitOfMeasure() + " (EACH | STRAND | PAIR | SET | BOX | BAG | SHEET)",
+                        req.getUnitOfMeasure());
+            }
+            p.setUnitOfMeasure(u);
+        } else if (creating) {
+            p.setUnitOfMeasure("EACH");
+        }
+        p.setTaxRateOverride(req.getTaxRateOverride());
+        p.setWeightGram(req.getWeightGram());
+        p.setLength(req.getLength());
+        p.setWidth(req.getWidth());
+        p.setHeight(req.getHeight());
+        p.setMetaTitle(blankToNull(req.getMetaTitle()));
+        p.setMetaDescription(blankToNull(req.getMetaDescription()));
+        p.setMetaKeywords(blankToNull(req.getMetaKeywords()));
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    private static void applySkuPim(ProductSkuEntity sku, AdminSkuRequestDto v) {
+        sku.setCostPrice(v.getCostPrice());
+        sku.setB2bWholesalePrice(v.getB2bWholesalePrice());
+        sku.setTaxRateOverride(v.getTaxRateOverride());
+        sku.setLength(v.getLength());
+        sku.setWidth(v.getWidth());
+        sku.setHeight(v.getHeight());
+    }
+
+    private void saveInfos(Long productId, List<AdminProductExtraRequestDto.Info> infos) {
+        if (infos == null) {
+            return;
+        }
+        int i = 0;
+        for (AdminProductExtraRequestDto.Info in : infos) {
+            ProductInfoEntity e = new ProductInfoEntity();
+            e.setProductId(productId);
+            e.setTitle(blankToNull(in.getTitle()));
+            e.setDescription(in.getDescription().trim());
+            e.setSortOrder(in.getSortOrder() != null ? in.getSortOrder() : i);
+            productInfos.create(e);
+            i++;
+        }
+    }
+
+    /** Mọi id phối kèm phải là sản phẩm tồn tại (chưa xoá), không trùng, không phải chính sản phẩm đang lưu. */
+    private void validateMixMatch(Long selfId, List<Long> ids) {
+        if (ids == null) {
+            return;
+        }
+        Set<Long> seen = new HashSet<>();
+        for (Long id : ids) {
+            if (id.equals(selfId)) {
+                throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                        "productMixMatch không được chứa chính sản phẩm này", id);
+            }
+            if (!seen.add(id)) {
+                throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "productMixMatch bị trùng id " + id, id);
+            }
+            ProductEntity related = products.findOne(id);
+            if (related == null || related.getDeletedDate() != null) {
+                throw new ResourceNotFoundException("Sản phẩm phối kèm", "Product", id);
+            }
+        }
+    }
+
+    private void saveMixMatch(Long productId, List<Long> ids) {
+        if (ids == null) {
+            return;
+        }
+        int i = 0;
+        for (Long id : ids) {
+            ProductMixMatchEntity e = new ProductMixMatchEntity();
+            e.setProductId(productId);
+            e.setRelatedProductId(id);
+            e.setSortOrder(i++);
+            mixMatches.create(e);
+        }
     }
 
     // ===================== PUBLISH / SKU (admin) =====================
@@ -421,6 +578,7 @@ public class ProductServiceImpl implements ProductService {
         applySkuFields(sku, req);
         sku.setStatus(normalizeSkuStatus(req.getStatus(), ProductSkuEntity.DRAFT));
         sku.setDefault(req.isDefault());
+        applySkuPim(sku, req);
         productSkus.create(sku);
         if (sku.isDefault()) {
             clearOtherDefaults(productId, sku.getId());
@@ -449,6 +607,7 @@ public class ProductServiceImpl implements ProductService {
         sku.setListPrice(req.getListPrice());
         applySkuFields(sku, req);
         sku.setStatus(normalizeSkuStatus(req.getStatus(), sku.getStatus()));
+        applySkuPim(sku, req);
         // onHand KHÔNG đổi ở đây: tồn kho đi qua inventory (adjustments) để có lịch sử.
         boolean wasDefault = sku.isDefault();
         sku.setDefault(req.isDefault());

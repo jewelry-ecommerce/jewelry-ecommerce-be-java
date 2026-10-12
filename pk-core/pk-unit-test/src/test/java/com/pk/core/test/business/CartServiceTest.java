@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -64,6 +65,8 @@ class CartServiceTest {
         service = new CartServiceImpl(carts, cartItems, products, productSkus, promotionPricing, preOrder);
         // Mặc định không có khuyến mãi; test riêng ghi đè.
         lenient().when(promotionPricing.unitDiscount(any(), any())).thenReturn(BigDecimal.ZERO);
+        // Mặc định mọi sản phẩm cha đang PUBLISHED (SKU chỉ bán được khi sản phẩm cha bán được); test riêng ghi đè.
+        lenient().when(products.findOne(anyLong())).thenAnswer(inv -> product(inv.getArgument(0, Long.class), 1L));
     }
 
     // ------------------------------------------------------------------ fixtures

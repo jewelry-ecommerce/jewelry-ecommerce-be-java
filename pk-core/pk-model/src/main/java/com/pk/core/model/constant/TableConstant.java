@@ -42,6 +42,9 @@ public final class TableConstant {
     public static final String PRODUCT_ATTRIBUTES = "product_attributes";
     public static final String SKU_ATTRIBUTE_VALUES = "sku_attribute_values";
     public static final String PRODUCT_MEDIA = "product_media";
+    // V18__pim_extended_fields.sql
+    public static final String PRODUCT_INFOS = "product_infos";
+    public static final String PRODUCT_MIX_MATCHES = "product_mix_matches";
 
     // Admin - CMS (V2__admin_extensions.sql, mới 2026-09-29, chưa có entity, để sẵn hằng)
     public static final String CMS_PAGES = "cms_pages";
@@ -54,6 +57,9 @@ public final class TableConstant {
     // Banner (V6__banners.sql, 2026-10-06)
     public static final String BANNERS = "banners";
     public static final String BANNER_PLACEMENTS = "banner_placements";
+    // V17__banner_layouts.sql
+    public static final String BANNER_PLACEMENT_LAYOUTS = "banner_placement_layouts";
+    public static final String BANNER_PLACEMENT_LAYOUT_ITEMS = "banner_placement_layout_items";
 
     // Yêu cầu khách hàng (V7__customer_requests.sql, 2026-10-06)
     public static final String CUSTOMER_REQUESTS = "customer_requests";
