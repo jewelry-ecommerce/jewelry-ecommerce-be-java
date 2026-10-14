@@ -17,7 +17,21 @@ public interface CmsService {
 
     /** GET /storefront/cms/pages/{slug} (công khai) - trang CMS theo slug kèm blocks (theo sortOrder). CHỈ trả trang
      * PUBLISHED và chưa xoá mềm; DRAFT/không có -> 404 (không lộ trang chưa xuất bản). Thêm 2026-10-06. */
-    CmsStorefrontPageResponseDto findPublishedBySlug(String slug);
+    default CmsStorefrontPageResponseDto findPublishedBySlug(String slug) {
+        return findPublishedBySlug(slug, null);
+    }
+
+    /** Như trên, có lọc theo thiết bị (DESKTOP|MOBILE; null = không lọc). Phục vụ BẢN PUBLIC (snapshot), kiểm tra lịch. */
+    CmsStorefrontPageResponseDto findPublishedBySlug(String slug, String device);
+
+    /** POST /admin/cms/pages/{pageId}/publish - chụp bản nháp thành bản public mới. */
+    CmsPageResponseDto publishPage(Long pageId);
+
+    /** POST /admin/cms/pages/{pageId}/unpublish - gỡ bản public (nháp giữ nguyên). */
+    CmsPageResponseDto unpublishPage(Long pageId);
+
+    /** DELETE /admin/cms/pages/{pageId} - xoá mềm trang. */
+    void deletePage(Long pageId);
 
     /** POST /admin/cms/pages - tạo page, seed blocks ban đầu nếu request.blocks != null. */
     CmsPageResponseDto createPage(AdminCmsPageRequestDto req);

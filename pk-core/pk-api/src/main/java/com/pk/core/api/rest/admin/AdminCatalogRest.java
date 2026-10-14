@@ -4,6 +4,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import com.pk.core.model.constant.UrlConstant;
 import lombok.RequiredArgsConstructor;
 
+import com.pk.core.business.service.AdminProductQuery;
 import com.pk.core.business.service.CategoryService;
 import com.pk.core.business.service.CollectionService;
 import com.pk.core.business.service.ProductAttributeService;
@@ -67,12 +68,48 @@ public class AdminCatalogRest extends AbstractRest {
                                  @RequestParam(required = false) String status,
                                  @RequestParam(required = false) String categorySlug,
                                  @RequestParam(required = false) String collectionSlug,
+                                 @RequestParam(required = false) java.math.BigDecimal minPrice,
+                                 @RequestParam(required = false) java.math.BigDecimal maxPrice,
+                                 @RequestParam(required = false) String timeFilter,
+                                 @RequestParam(required = false) String timeFrom,
+                                 @RequestParam(required = false) String timeTo,
+                                 @RequestParam(required = false) String createdFrom,
+                                 @RequestParam(required = false) String createdTo,
+                                 @RequestParam(required = false) String updatedFrom,
+                                 @RequestParam(required = false) String updatedTo,
+                                 @RequestParam(required = false) Boolean hasPendingApproval,
+                                 @RequestParam(required = false) String approvalStatus,
                                  @RequestParam(required = false, defaultValue = "1") int page,
                                  @RequestParam(required = false, defaultValue = "20") int take,
                                  HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(
-                    productService.searchForAdmin(status, categorySlug, collectionSlug, search, page, take));
+            return restSuccessHandle.handleSuccess(productService.searchForAdmin(new AdminProductQuery(status,
+                    categorySlug, collectionSlug, search, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
+                    createdFrom, createdTo, updatedFrom, updatedTo, page, take, hasPendingApproval, approvalStatus)));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    /** Số sản phẩm theo từng trạng thái vòng đời, cùng bộ lọc với danh sách (trừ status/page/take). */
+    @GetMapping(UrlAdminConstant.Catalog.PRODUCTS + "/counts")
+    public BaseRes productCounts(@RequestParam(required = false) String search,
+                                  @RequestParam(required = false) String categorySlug,
+                                  @RequestParam(required = false) String collectionSlug,
+                                  @RequestParam(required = false) java.math.BigDecimal minPrice,
+                                  @RequestParam(required = false) java.math.BigDecimal maxPrice,
+                                  @RequestParam(required = false) String timeFilter,
+                                  @RequestParam(required = false) String timeFrom,
+                                  @RequestParam(required = false) String timeTo,
+                                  @RequestParam(required = false) String createdFrom,
+                                  @RequestParam(required = false) String createdTo,
+                                  @RequestParam(required = false) String updatedFrom,
+                                  @RequestParam(required = false) String updatedTo,
+                                  HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productService.countsForAdmin(new AdminProductQuery(null,
+                    categorySlug, collectionSlug, search, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
+                    createdFrom, createdTo, updatedFrom, updatedTo, 1, 20)));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -123,6 +160,27 @@ public class AdminCatalogRest extends AbstractRest {
                                    HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(productService.archive(productId));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PatchMapping(UrlAdminConstant.Catalog.PRODUCTS + "/{productId}/discontinue")
+    public BaseRes discontinueProduct(@PathVariable Long productId,
+                                       HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productService.discontinue(productId));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    /** Khôi phục từ ARCHIVED/DISCONTINUED về UNPUBLISHED. */
+    @PatchMapping(UrlAdminConstant.Catalog.PRODUCTS + "/{productId}/restore")
+    public BaseRes restoreProduct(@PathVariable Long productId,
+                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productService.restore(productId));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -285,6 +343,13 @@ public class AdminCatalogRest extends AbstractRest {
         }
     }
 
+    /** 204 No Content (lỗi 404/409 rơi vào GlobalExceptionHandler, giống deleteProduct). */
+    @DeleteMapping(UrlAdminConstant.Catalog.CATEGORIES + "/{categoryId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCategory(@PathVariable Long categoryId) {
+        categoryService.delete(categoryId);
+    }
+
     @PutMapping(UrlAdminConstant.Catalog.CATEGORIES + "/{categoryId}")
     public BaseRes updateCategory(@PathVariable Long categoryId,
                                    @Valid @RequestBody AdminCategoryRequestDto request,
@@ -316,6 +381,13 @@ public class AdminCatalogRest extends AbstractRest {
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
+    }
+
+    /** 204 No Content (lỗi 404/409 rơi vào GlobalExceptionHandler, giống deleteProduct). */
+    @DeleteMapping(UrlAdminConstant.Catalog.COLLECTIONS + "/{collectionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCollection(@PathVariable Long collectionId) {
+        collectionService.delete(collectionId);
     }
 
     @PutMapping(UrlAdminConstant.Catalog.COLLECTIONS + "/{collectionId}")
@@ -370,6 +442,13 @@ public class AdminCatalogRest extends AbstractRest {
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
+    }
+
+    /** 204 No Content (lỗi 404/409 rơi vào GlobalExceptionHandler, giống deleteProduct). */
+    @DeleteMapping(UrlAdminConstant.Catalog.ATTRIBUTES + "/{attributeId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAttribute(@PathVariable Long attributeId) {
+        attributeService.delete(attributeId);
     }
 
     @PutMapping(UrlAdminConstant.Catalog.ATTRIBUTES + "/{attributeId}")

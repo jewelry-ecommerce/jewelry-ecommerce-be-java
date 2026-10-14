@@ -49,6 +49,16 @@ public class ProductAttributeEntity extends UpdateEntity {
     @Column(name = "options")
     private String options;
 
+    public static final String ACTIVE = "ACTIVE";
+    public static final String INACTIVE = "INACTIVE";
+
+    @Column(name = "status")
+    private String status = ACTIVE;
+
+    /** TEXT | IMAGE (dạng hiển thị giá trị). */
+    @Column(name = "display_type")
+    private String displayType = "TEXT";
+
     public ProductAttributeEntity(String name, String code, String type, String options) {
         this.name = name;
         this.code = code;

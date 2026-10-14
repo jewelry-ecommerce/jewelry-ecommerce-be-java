@@ -24,4 +24,7 @@ public interface CollectionService {
 
     /** Bỏ sản phẩm khỏi bộ sưu tập - DELETE /admin/catalog/collections/{collectionId}/products/{productId}. */
     CollectionResponseDto removeProduct(Long collectionId, Long productId);
+
+    /** Xoá bộ sưu tập (gỡ liên kết sản phẩm, KHÔNG xoá sản phẩm) - DELETE /admin/catalog/collections/{collectionId}. */
+    void delete(Long collectionId);
 }

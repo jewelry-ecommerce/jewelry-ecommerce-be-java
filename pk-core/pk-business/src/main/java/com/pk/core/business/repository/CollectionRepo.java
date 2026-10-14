@@ -22,6 +22,10 @@ public interface CollectionRepo extends PkRepo<CollectionEntity, Long> {
     int addProduct(@Param("collectionId") Long collectionId, @Param("productId") Long productId);
 
     /** Bỏ sản phẩm khỏi bộ sưu tập. Trả 1 nếu có xoá, 0 nếu không có quan hệ. */
+    /** Gỡ toàn bộ sản phẩm khỏi bộ sưu tập (trước khi xoá bộ sưu tập). */
+    @Modifying
+    int removeAllProducts(@Param("collectionId") Long collectionId);
+
     @Modifying
     int removeProduct(@Param("collectionId") Long collectionId, @Param("productId") Long productId);
 }

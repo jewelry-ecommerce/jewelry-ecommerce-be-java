@@ -28,9 +28,22 @@ public class CmsStorefrontPageResponseDto {
     @JsonIgnore
     private Map<String, Object> seo;
 
+    /** Thiết bị mục tiêu và phiên bản của bản public (chỉ dùng dựng `layout`). */
+    @JsonIgnore
+    private String targetDevice;
+    @JsonIgnore
+    private int versionId;
+
     public CmsStorefrontPageResponseDto(String id, String name, String slug, String status,
                                         List<CmsStorefrontBlockResponseDto> blocks) {
-        this(id, name, slug, status, blocks, null, null);
+        this(id, name, slug, status, blocks, null, null, null, 0);
+    }
+
+    /** Chữ ký cũ (7 tham số). */
+    public CmsStorefrontPageResponseDto(String id, String name, String slug, String status,
+                                        List<CmsStorefrontBlockResponseDto> blocks, String locale,
+                                        Map<String, Object> seo) {
+        this(id, name, slug, status, blocks, locale, seo, null, 0);
     }
 
     // ---- FE PageResponse {page, layout, blocks}: field tính toán, giữ nguyên các field phẳng cũ ----
@@ -50,14 +63,15 @@ public class CmsStorefrontPageResponseDto {
         return m;
     }
 
-    /** Layout trình bày cố định (backend chưa có hệ thống layout CMS). */
+    /** Layout của bản public: thiết bị mục tiêu + số phiên bản xuất bản (versionId = published_version). */
     public Map<String, Object> getLayout() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", "default");
         m.put("name", "Default");
-        m.put("targetDevice", "ALL");
-        m.put("versionId", "1");
-        m.put("versionName", "v1");
+        m.put("targetDevice", targetDevice == null || targetDevice.isBlank() ? "ALL" : targetDevice);
+        int v = Math.max(1, versionId);
+        m.put("versionId", String.valueOf(v));
+        m.put("versionName", "v" + v);
         return m;
     }
 }

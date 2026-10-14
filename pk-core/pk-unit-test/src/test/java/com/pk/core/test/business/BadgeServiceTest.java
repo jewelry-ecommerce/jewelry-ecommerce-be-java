@@ -1,8 +1,10 @@
 package com.pk.core.test.business;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pk.core.business.repository.BadgeFlowRepo;
 import com.pk.core.business.repository.BadgeTemplateRepo;
+import com.pk.core.business.repository.CategoryRepo;
 import com.pk.core.business.repository.CollectionRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
@@ -12,16 +14,20 @@ import com.pk.core.business.service.PreOrderService;
 import com.pk.core.business.service.impl.BadgeServiceImpl;
 import com.pk.core.common.exception.BusinessException;
 import com.pk.core.model.dto.request.AdminBadgeFlowRequestDto;
+import com.pk.core.model.dto.request.AdminBadgeTemplateRequestDto;
 import com.pk.core.model.dto.request.BadgeFlowTemplateRefDto;
+import com.pk.core.model.dto.response.BadgeTemplateResponseDto;
 import com.pk.core.model.dto.response.SkuBadgeResponseDto;
 import com.pk.core.model.entity.BadgeFlowEntity;
 import com.pk.core.model.entity.BadgeTemplateEntity;
+import com.pk.core.model.entity.CategoryEntity;
 import com.pk.core.model.entity.ProductEntity;
 import com.pk.core.model.entity.ProductSkuEntity;
 import com.pk.core.model.entity.PromotionEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
@@ -29,11 +35,17 @@ import org.springframework.data.domain.Sort;
 import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** Quy tắc nhãn storefront: PRE_ORDER -> OUT_OF_STOCK -> CAMPAIGN, mỗi SKU tối đa 1 nhãn. */
@@ -46,13 +58,14 @@ class BadgeServiceTest {
     @Mock ProductRepo products;
     @Mock CollectionRepo collections;
     @Mock PromotionRepo promotions;
+    @Mock CategoryRepo categories;
     @Mock PreOrderService preOrder;
 
     private BadgeServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new BadgeServiceImpl(templates, flows, productSkus, products, collections, promotions, preOrder,
+        service = new BadgeServiceImpl(templates, flows, productSkus, products, collections, promotions, categories, preOrder,
                 new ObjectMapper());
     }
 
@@ -256,5 +269,260 @@ class BadgeServiceTest {
         when(productSkus.findOne(7L)).thenReturn(sku(7, 100, 0));
 
         assertEquals("OOS", onlyBadgeCode(service.forSkus(List.of("7"), null)));
+    }
+
+    // ===================== v5: scope payload, validate, guard =====================
+
+    private AdminBadgeFlowRequestDto flowReq(String status, String ruleType, Map<String, Object> rule) {
+        return new AdminBadgeFlowRequestDto("Flow", null, null, null, status, ruleType, rule, "ALL",
+                List.of(new BadgeFlowTemplateRefDto("3", 1, false)));
+    }
+
+    private JsonNode savedRule() throws Exception {
+        ArgumentCaptor<BadgeFlowEntity> captor = ArgumentCaptor.forClass(BadgeFlowEntity.class);
+        verify(flows).create(captor.capture());
+        return new ObjectMapper().readTree(captor.getValue().getRuleConfig());
+    }
+
+    @Test
+    void categoryPickerPayloadIsNormalizedToCategoryIdsAndKeptForReopen() throws Exception {
+        when(templates.findOne(3L)).thenReturn(template(3, "SALE", "CAMPAIGN", 5));
+        CategoryEntity cat = new CategoryEntity("Nhẫn", "nhan", null);
+        cat.setId(1L);
+        when(categories.findOne(1L)).thenReturn(cat);
+
+        service.createFlow(flowReq("ACTIVE", "CATEGORY",
+                Map.of("categories", List.of(Map.of("categoryId", 1, "name", "Nhẫn")))));
+
+        JsonNode rule = savedRule();
+        assertEquals(1L, rule.get("categoryIds").get(0).asLong());
+        assertTrue(rule.has("categories"), "giữ payload gốc để FE mở lại picker");
+    }
+
+    @Test
+    void manualTargetWithVariantOnlyAppliesThatSkuNotWholeProduct() throws Exception {
+        when(templates.findOne(3L)).thenReturn(template(3, "SALE", "CAMPAIGN", 5));
+        when(productSkus.findOne(11L)).thenReturn(sku(11, 10, 1));
+
+        service.createFlow(flowReq("ACTIVE", "MANUAL", Map.of("targets",
+                List.of(Map.of("productId", 10, "productVariantId", 11, "skuCode", "R01")))));
+
+        JsonNode rule = savedRule();
+        assertEquals(11L, rule.get("skuIds").get(0).asLong());
+        assertFalse(rule.has("productIds"));
+    }
+
+    @Test
+    void promotionPickerPayloadIsNormalizedToPromotionIds() throws Exception {
+        when(templates.findOne(3L)).thenReturn(template(3, "SALE", "CAMPAIGN", 5));
+        PromotionEntity promo = new PromotionEntity();
+        promo.setId(5L);
+        when(promotions.findOne(5L)).thenReturn(promo);
+
+        service.createFlow(flowReq("ACTIVE", "PROMOTION",
+                Map.of("promotions", List.of(Map.of("id", 5, "name", "Sale")))));
+
+        assertEquals(5L, savedRule().get("promotionIds").get(0).asLong());
+    }
+
+    @Test
+    void activeFlowWithEmptyScopeIsRejected() {
+        when(templates.findOne(3L)).thenReturn(template(3, "SALE", "CAMPAIGN", 5));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createFlow(flowReq("ACTIVE", "CATEGORY", null)));
+        assertEquals("BADGE_SCOPE_INVALID", ex.getCode());
+        verify(flows, never()).create(any());
+    }
+
+    @Test
+    void activeFlowWithUnknownCategoryIsRejected() {
+        when(templates.findOne(3L)).thenReturn(template(3, "SALE", "CAMPAIGN", 5));
+
+        assertThrows(BusinessException.class, () -> service.createFlow(
+                flowReq("ACTIVE", "CATEGORY", Map.of("categoryIds", List.of(99)))));
+    }
+
+    @Test
+    void draftFlowMayHaveEmptyScope() {
+        when(templates.findOne(3L)).thenReturn(template(3, "SALE", "CAMPAIGN", 5));
+
+        service.createFlow(flowReq("DRAFT", "CATEGORY", null));
+
+        verify(flows).create(any(BadgeFlowEntity.class));
+    }
+
+    @Test
+    void legacyFlowSavedWithPickerPayloadStillMatchesAtRuntime() {
+        stub(List.of(template(4, "NEW", "NEW_ARRIVAL", 1)),
+                List.of(flow(13, "CATEGORY", "{\"categories\":[{\"categoryId\":5,\"name\":\"Nhẫn\"}]}",
+                        "[" + ref(4, 1, false) + "]")), false);
+        when(productSkus.findOne(7L)).thenReturn(sku(7, 100, 5));
+        ProductEntity product = new ProductEntity(5L, "P", "SP", "sp");
+        product.setId(100L);
+        when(products.findOne(100L)).thenReturn(product);
+
+        assertEquals("NEW", onlyBadgeCode(service.forSkus(List.of("7"), null)));
+    }
+
+    @Test
+    void runningOrScheduledFlowCannotBeDeletedButPausedCan() {
+        BadgeFlowEntity running = flow(20, "ALL", null, "[]");
+        when(flows.findOne(20L)).thenReturn(running);
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.deleteFlow("20"));
+        assertEquals("BADGE_FLOW_LOCKED", ex.getCode());
+
+        BadgeFlowEntity scheduled = flow(21, "ALL", null, "[]");
+        scheduled.setActiveFrom(new Date(System.currentTimeMillis() + 3_600_000));
+        when(flows.findOne(21L)).thenReturn(scheduled);
+        assertThrows(BusinessException.class, () -> service.deleteFlow("21"));
+
+        BadgeFlowEntity paused = flow(22, "ALL", null, "[]");
+        paused.setStatus(BadgeFlowEntity.INACTIVE);
+        when(flows.findOne(22L)).thenReturn(paused);
+        service.deleteFlow("22");
+        verify(flows).delete(paused);
+    }
+
+    @Test
+    void endedFlowCannotBeEdited() {
+        BadgeFlowEntity ended = flow(30, "ALL", null, "[]");
+        ended.setActiveTo(new Date(System.currentTimeMillis() - 3_600_000));
+        when(flows.findOne(30L)).thenReturn(ended);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateFlow("30", flowReq("ACTIVE", "ALL", null)));
+        assertEquals("BADGE_FLOW_LOCKED", ex.getCode());
+    }
+
+    @Test
+    void activeOrReferencedTemplateCannotBeDeleted() {
+        BadgeTemplateEntity active = template(3, "SALE", "CAMPAIGN", 5);
+        when(templates.findOne(3L)).thenReturn(active);
+        assertThrows(BusinessException.class, () -> service.deleteTemplate("3"));
+
+        BadgeTemplateEntity draft = template(4, "NEW", "NEW_ARRIVAL", 1);
+        draft.setStatus(BadgeTemplateEntity.DRAFT);
+        when(templates.findOne(4L)).thenReturn(draft);
+        when(flows.findAll(any(Sort.class))).thenReturn(List.of(flow(1, "ALL", null, "[" + ref(4, 1, false) + "]")));
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.deleteTemplate("4"));
+        assertEquals("BADGE_IN_USE", ex.getCode());
+    }
+
+    @Test
+    void unreferencedDraftTemplateIsSoftDeleted() {
+        BadgeTemplateEntity draft = template(5, "OLD", "CAMPAIGN", 1);
+        draft.setStatus(BadgeTemplateEntity.DRAFT);
+        when(templates.findOne(5L)).thenReturn(draft);
+        when(flows.findAll(any(Sort.class))).thenReturn(List.of());
+
+        service.deleteTemplate("5");
+
+        assertNotNull(draft.getDeletedDate());
+        verify(templates).update(draft);
+    }
+
+    @Test
+    void templateResponseCarriesMobileAssetsAndAssetMeta() {
+        BadgeTemplateEntity t = template(6, "IMG", "CAMPAIGN", 1);
+        t.setType("IMAGE");
+        t.setImage("d.png");
+        t.setImageMobile("m.png");
+        t.setIconMobile("mi.png");
+        t.setAssetMeta("{\"width\":64}");
+        when(templates.findOne(6L)).thenReturn(t);
+
+        BadgeTemplateResponseDto dto = service.findTemplateById("6");
+
+        assertEquals("m.png", dto.getImageMobile());
+        assertEquals("mi.png", dto.getIconMobile());
+        assertEquals(64, ((Number) dto.getAssetMeta().get("width")).intValue());
+    }
+
+    @Test
+    void patchClearsAssetWithEmptyStringAndChangingTypeDropsUnusedAssets() {
+        BadgeTemplateEntity t = template(7, "IMG", "CAMPAIGN", 1);
+        t.setType("IMAGE");
+        t.setImage("d.png");
+        t.setImageMobile("m.png");
+        t.setAssetMeta("{\"width\":64}");
+        when(templates.findOne(7L)).thenReturn(t);
+
+        AdminBadgeTemplateRequestDto clear = new AdminBadgeTemplateRequestDto();
+        clear.setImage("");
+        service.updateTemplate("7", clear);
+        assertNull(t.getImage());
+        assertEquals("m.png", t.getImageMobile());
+
+        AdminBadgeTemplateRequestDto toText = new AdminBadgeTemplateRequestDto();
+        toText.setType("TEXT");
+        service.updateTemplate("7", toText);
+        assertNull(t.getImageMobile());
+        assertNull(t.getAssetMeta());
+    }
+
+    // ---------------------------------------------------------------- P1: search / displayStatus / counts
+
+    private static BadgeFlowEntity named(long id, String name, String status, Date from, Date to) {
+        BadgeFlowEntity f = flow(id, "ALL", null, "[]");
+        f.setName(name);
+        f.setStatus(status);
+        f.setActiveFrom(from);
+        f.setActiveTo(to);
+        return f;
+    }
+
+    private List<BadgeFlowEntity> campaigns() {
+        Date hourAgo = new Date(System.currentTimeMillis() - 3_600_000);
+        Date hourLater = new Date(System.currentTimeMillis() + 3_600_000);
+        return List.of(
+                named(1, "Sale mùa hè", BadgeFlowEntity.ACTIVE, hourAgo, hourLater),          // RUNNING
+                named(2, "Sale mùa đông", BadgeFlowEntity.ACTIVE, hourLater, null),           // SCHEDULED
+                named(3, "Khai trương", BadgeFlowEntity.ACTIVE, null, hourAgo),               // ENDED
+                named(4, "Nháp sale", BadgeFlowEntity.DRAFT, null, null),                     // DRAFT
+                named(5, "Tạm dừng", BadgeFlowEntity.INACTIVE, null, null));                  // PAUSED
+    }
+
+    @Test
+    void flowListFiltersByDisplayStatusAndCountsAreIndependentOfFilter() {
+        when(flows.findAll(any(Sort.class))).thenReturn(campaigns());
+
+        var running = service.findFlows(1, 20, null, null, "running");
+
+        assertEquals(1, running.getTotal());
+        assertEquals("RUNNING", running.getItems().get(0).getDisplayStatus());
+        assertEquals(5, running.getCounts().getAll());
+        assertEquals(1L, running.getCounts().getDisplayStatus().get("SCHEDULED"));
+        assertEquals(1L, running.getCounts().getDisplayStatus().get("ENDED"));
+        assertEquals(1L, running.getCounts().getDisplayStatus().get("PAUSED"));
+        assertEquals(1L, running.getCounts().getDisplayStatus().get("DRAFT"));
+    }
+
+    @Test
+    void flowListSearchMatchesNameAndNarrowsCounts() {
+        when(flows.findAll(any(Sort.class))).thenReturn(campaigns());
+
+        var sale = service.findFlows(1, 20, null, "SALE", null);
+
+        assertEquals(3, sale.getTotal());
+        assertEquals(3, sale.getCounts().getAll());
+        assertEquals(1L, sale.getCounts().getDraft());
+    }
+
+    @Test
+    void flowListRejectsUnknownDisplayStatus() {
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.findFlows(1, 20, null, null, "LIVE"));
+        assertEquals("VALIDATION_FAILED", ex.getCode());
+    }
+
+    @Test
+    void templateListSearchMatchesNameOrCode() {
+        when(templates.findAll(any(Sort.class))).thenReturn(List.of(template(1, "SALE_TAG", "CAMPAIGN", 1),
+                template(2, "NEW_TAG", "CAMPAIGN", 1)));
+
+        var found = service.findTemplates(1, 20, null, null, null, null, "sale");
+
+        assertEquals(1, found.getTotal());
+        assertEquals(1, found.getItems().size());
     }
 }

@@ -28,4 +28,6 @@ public class BadgeFlowResponseDto {
     private Map<String, Object> ruleConfig;
     private String channel;
     private List<BadgeFlowTemplateRefDto> templates;
+    /** DRAFT | PAUSED | SCHEDULED | RUNNING | ENDED - tính theo thời điểm thật (khớp BadgeCampaignDisplayStatus của FE). */
+    private String displayStatus;
 }

@@ -27,4 +27,8 @@ public class BadgeTemplateResponseDto {
     private String icon;
     private String image;
     private int defaultPriorityWeight;
+    /** Ảnh/icon bản mobile và metadata asset - trước đây có lưu nhưng không trả về. */
+    private String iconMobile;
+    private String imageMobile;
+    private Map<String, Object> assetMeta;
 }

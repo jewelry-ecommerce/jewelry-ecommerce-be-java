@@ -5,8 +5,11 @@ import lombok.RequiredArgsConstructor;
 
 import com.pk.core.business.service.CategoryService;
 import com.pk.core.business.service.CollectionService;
+import com.pk.core.business.service.ProductSearchQuery;
 import com.pk.core.business.service.ProductService;
 import com.pk.core.business.web.AbstractRest;
+import com.pk.core.common.exception.BusinessException;
+import com.pk.core.common.exception.ErrorCode;
 import com.pk.core.common.web.BaseRes;
 import com.pk.core.model.constant.UrlConstant;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Storefront - đọc catalog, không cần đăng nhập (xem document/09-tong-hop-api-fe.md mục C).
@@ -39,16 +44,65 @@ public class ProductRest extends AbstractRest {
                            @RequestParam(required = false) String material,
                            @RequestParam(required = false) BigDecimal minPrice,
                            @RequestParam(required = false) BigDecimal maxPrice,
+                           @RequestParam(required = false) String categorySlugs,
+                           @RequestParam(required = false) String attributes,
+                           @RequestParam(required = false) Boolean inStock,
                            @RequestParam(required = false, defaultValue = "NEWEST") String sort,
                            @RequestParam(required = false, defaultValue = "1") int page,
                            @RequestParam(required = false, defaultValue = "20") int take,
                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(
-                    productService.search(category, collection, search, material, minPrice, maxPrice, sort, page, take));
+            return restSuccessHandle.handleSuccess(productService.search(new ProductSearchQuery(category,
+                    splitStrings(categorySlugs), collection, search, material, minPrice, maxPrice,
+                    splitIds(attributes), inStock, sort, page, take)));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
+    }
+
+    /** Bộ lọc (facets) cho trang danh sách: [{id, label, options:[{value, label, count, code}]}]. `value` dùng cho `attributes=`. */
+    @GetMapping(UrlConstant.Product.BASE + "/filters")
+    public BaseRes filters(@RequestParam(required = false) String category,
+                            @RequestParam(required = false) String categorySlugs,
+                            @RequestParam(required = false) String collection,
+                            @RequestParam(required = false) String search,
+                            @RequestParam(required = false) BigDecimal minPrice,
+                            @RequestParam(required = false) BigDecimal maxPrice,
+                            @RequestParam(required = false) Boolean inStock,
+                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productService.filters(new ProductSearchQuery(category,
+                    splitStrings(categorySlugs), collection, search, null, minPrice, maxPrice, List.of(), inStock,
+                    "NEWEST", 1, 20)));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    private static List<String> splitStrings(String csv) {
+        List<String> out = new ArrayList<>();
+        if (csv != null) {
+            for (String part : csv.split(",")) {
+                if (!part.isBlank()) {
+                    out.add(part.trim());
+                }
+            }
+        }
+        return out;
+    }
+
+    /** `attributes=12,15` -> id giá trị thuộc tính; phần tử không phải số -> 400 (không bỏ qua im lặng). */
+    private static List<Long> splitIds(String csv) {
+        List<Long> out = new ArrayList<>();
+        for (String part : splitStrings(csv)) {
+            try {
+                out.add(Long.valueOf(part));
+            } catch (NumberFormatException ex) {
+                throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                        "attributes phải là danh sách id số, cách nhau dấu phẩy: " + part, part);
+            }
+        }
+        return out;
     }
 
     @GetMapping(UrlConstant.Product.CATEGORIES)

@@ -32,6 +32,10 @@ public class CategoryEntity extends BaseEntity {
     @Column(name = "slug")
     private String slug;
 
+    /** Mã riêng (khác slug); backfill = slug ở V20. */
+    @Column(name = "code")
+    private String code;
+
     @Column(name = "description")
     private String description;
 
@@ -47,6 +51,7 @@ public class CategoryEntity extends BaseEntity {
     public CategoryEntity(String name, String slug, String description) {
         this.name = name;
         this.slug = slug;
+        this.code = slug;
         this.description = description;
     }
 }

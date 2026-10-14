@@ -24,6 +24,11 @@ CREATE SEQUENCE cart_items_id_seq START WITH 1;
 CREATE SEQUENCE sku_attribute_values_id_seq START WITH 1;
 CREATE SEQUENCE product_media_id_seq START WITH 1;
 CREATE SEQUENCE product_infos_id_seq START WITH 1;
+CREATE SEQUENCE product_approval_requests_id_seq START WITH 1;
+CREATE SEQUENCE import_export_jobs_id_seq START WITH 1;
+CREATE SEQUENCE import_job_rows_id_seq START WITH 1;
+CREATE SEQUENCE category_attributes_id_seq START WITH 1;
+CREATE SEQUENCE product_attribute_values_id_seq START WITH 1;
 CREATE SEQUENCE product_mix_matches_id_seq START WITH 1;
 CREATE SEQUENCE wishlist_items_id_seq START WITH 1;
 CREATE SEQUENCE banner_placements_id_seq START WITH 1;
@@ -105,6 +110,7 @@ CREATE TABLE categories (
     parent_id    BIGINT REFERENCES categories (id),
     name         VARCHAR(120) NOT NULL,
     slug         VARCHAR(140) NOT NULL,
+    code         VARCHAR(140),
     description  VARCHAR(500),
     image_url    VARCHAR(500),
     sort_order   INTEGER NOT NULL DEFAULT 0,
@@ -115,7 +121,8 @@ CREATE TABLE categories (
     updated_date TIMESTAMP,
     deleted_id   BIGINT,
     deleted_date TIMESTAMP,
-    CONSTRAINT uq_categories_slug UNIQUE (slug)
+    CONSTRAINT uq_categories_slug UNIQUE (slug),
+    CONSTRAINT uq_categories_code UNIQUE (code)
 );
 
 CREATE TABLE collections (
@@ -170,7 +177,7 @@ CREATE TABLE products (
     CONSTRAINT uq_products_code UNIQUE (code),
     CONSTRAINT uq_products_slug UNIQUE (slug),
     CONSTRAINT ck_products_price CHECK (base_price >= 0),
-    CONSTRAINT ck_products_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')),
+    CONSTRAINT ck_products_status CHECK (status IN ('DRAFT', 'UNPUBLISHED', 'PUBLISHED', 'DISCONTINUED', 'ARCHIVED')),
     CONSTRAINT ck_products_published CHECK (status <> 'PUBLISHED' OR published_at IS NOT NULL)
 );
 
@@ -370,6 +377,8 @@ CREATE TABLE product_attributes (
     code         VARCHAR(60) NOT NULL,
     type         VARCHAR(20) NOT NULL,
     options      VARCHAR(2000),
+    status       VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    display_type VARCHAR(20) NOT NULL DEFAULT 'TEXT',
     created_id   BIGINT,
     created_date TIMESTAMP NOT NULL,
     updated_id   BIGINT,
@@ -386,6 +395,14 @@ CREATE TABLE cms_pages (
     locale        VARCHAR(10) NOT NULL DEFAULT 'vi',
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,
     seo           TEXT,
+    target_device VARCHAR(10) NOT NULL DEFAULT 'ALL',
+    schedule_start TIMESTAMP,
+    schedule_end  TIMESTAMP,
+    published_slug VARCHAR(140),
+    published_snapshot TEXT,
+    published_version INTEGER NOT NULL DEFAULT 0,
+    published_at  TIMESTAMP,
+    published_hash VARCHAR(64),
     created_id   BIGINT,
     created_date TIMESTAMP NOT NULL,
     updated_id   BIGINT,
@@ -393,6 +410,7 @@ CREATE TABLE cms_pages (
     deleted_id   BIGINT,
     deleted_date TIMESTAMP,
     CONSTRAINT uq_cms_pages_slug UNIQUE (slug),
+    CONSTRAINT ck_cms_pages_target_device CHECK (target_device IN ('ALL', 'DESKTOP', 'MOBILE')),
     CONSTRAINT ck_cms_pages_status CHECK (status IN ('DRAFT', 'PUBLISHED'))
 );
 
@@ -519,6 +537,53 @@ CREATE TABLE product_infos (
     created_date  TIMESTAMP NOT NULL
 );
 CREATE INDEX ix_product_infos_product ON product_infos (product_id, sort_order);
+
+CREATE TABLE product_approval_requests (
+    id              BIGINT PRIMARY KEY ,
+    product_id      BIGINT NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+    action_type     VARCHAR(20) NOT NULL,
+    status          VARCHAR(12) NOT NULL DEFAULT 'PENDING',
+    submitted_by    BIGINT,
+    submitted_at    TIMESTAMP NOT NULL,
+    reviewed_by     BIGINT,
+    reviewed_at     TIMESTAMP,
+    rejected_reason VARCHAR(500),
+    before_snapshot TEXT,
+    after_snapshot  TEXT,
+    created_id      BIGINT,
+    created_date    TIMESTAMP NOT NULL,
+    updated_id      BIGINT,
+    updated_date    TIMESTAMP,
+    CONSTRAINT ck_par_action CHECK (action_type IN ('CREATE_PRODUCT', 'UPDATE_PRODUCT')),
+    CONSTRAINT ck_par_status CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'))
+);
+CREATE INDEX ix_par_product ON product_approval_requests (product_id, id);
+CREATE INDEX ix_par_status ON product_approval_requests (status);
+
+
+CREATE TABLE category_attributes (
+    id            BIGINT PRIMARY KEY,
+    category_id   BIGINT NOT NULL REFERENCES categories (id) ON DELETE CASCADE,
+    attribute_id  BIGINT NOT NULL REFERENCES product_attributes (id) ON DELETE CASCADE,
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL,
+    CONSTRAINT uq_category_attributes UNIQUE (category_id, attribute_id)
+);
+
+CREATE TABLE product_attribute_values (
+    id            BIGINT PRIMARY KEY,
+    attribute_id  BIGINT NOT NULL REFERENCES product_attributes (id) ON DELETE CASCADE,
+    code          VARCHAR(255) NOT NULL,
+    value         VARCHAR(255) NOT NULL,
+    image_url     VARCHAR(500),
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL,
+    updated_id    BIGINT,
+    updated_date  TIMESTAMP,
+    CONSTRAINT uq_product_attribute_values_code UNIQUE (attribute_id, code),
+    CONSTRAINT uq_product_attribute_values_value UNIQUE (attribute_id, value)
+);
 
 CREATE TABLE product_mix_matches (
     id                  BIGINT PRIMARY KEY,
@@ -669,4 +734,36 @@ CREATE TABLE pre_order_configs (
     created_id    BIGINT,
     created_date  TIMESTAMP NOT NULL,
     CONSTRAINT ck_pre_order_scope_type CHECK (scope_type IN ('ALL', 'SKU', 'PRODUCT', 'CATEGORY', 'COLLECTION'))
+);
+
+CREATE TABLE import_export_jobs (
+    id              BIGINT PRIMARY KEY,
+    job_type        VARCHAR(10) NOT NULL,
+    entity_type     VARCHAR(20) NOT NULL,
+    status          VARCHAR(12) NOT NULL,
+    file_name       VARCHAR(255),
+    file_url        VARCHAR(500),
+    error_message   VARCHAR(1000),
+    total_rows      INTEGER NOT NULL,
+    success_rows    INTEGER NOT NULL,
+    failed_rows     INTEGER NOT NULL,
+    reference_type  VARCHAR(50),
+    reference_id    VARCHAR(100),
+    params          TEXT,
+    started_at      TIMESTAMP,
+    finished_at     TIMESTAMP,
+    created_id      BIGINT,
+    created_date    TIMESTAMP NOT NULL,
+    updated_id      BIGINT,
+    updated_date    TIMESTAMP
+);
+CREATE TABLE import_job_rows (
+    id            BIGINT PRIMARY KEY,
+    job_id        BIGINT NOT NULL REFERENCES import_export_jobs (id) ON DELETE CASCADE,
+    line_no       INTEGER NOT NULL,
+    status        VARCHAR(8) NOT NULL,
+    message       VARCHAR(1000),
+    data          TEXT,
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL
 );

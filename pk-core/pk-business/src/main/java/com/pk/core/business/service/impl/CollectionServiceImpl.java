@@ -103,6 +103,14 @@ public class CollectionServiceImpl implements CollectionService {
         return CollectionResponseDto.from(collection);
     }
 
+    @Transactional
+    @Override
+    public void delete(Long collectionId) {
+        CollectionEntity collection = requireCollection(collectionId);
+        collections.removeAllProducts(collectionId);
+        collections.delete(collection);
+    }
+
     private CollectionEntity requireCollection(Long collectionId) {
         CollectionEntity c = collections.findOne(collectionId);
         if (c == null) {

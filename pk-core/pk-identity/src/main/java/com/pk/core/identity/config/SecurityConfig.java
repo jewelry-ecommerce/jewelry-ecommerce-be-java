@@ -94,6 +94,7 @@ public class SecurityConfig {
                                 v1(UrlAdminConstant.Common.BASE + "/promotions/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/vouchers/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/cms/**"),
+                                v1(UrlAdminConstant.Common.BASE + "/ie/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/banner/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/badge-templates/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/badge-flow/**"))

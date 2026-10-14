@@ -16,4 +16,13 @@ public class BadgeFlowCountsDto {
     private long active;
     private long inactive;
     private long draft;
+    /** Đếm theo displayStatus: DRAFT | PAUSED | SCHEDULED | RUNNING | ENDED (cùng tập với `search`, không phụ thuộc status/displayStatus). */
+    private java.util.Map<String, Long> displayStatus = new java.util.LinkedHashMap<>();
+
+    public BadgeFlowCountsDto(long all, long active, long inactive, long draft) {
+        this.all = all;
+        this.active = active;
+        this.inactive = inactive;
+        this.draft = draft;
+    }
 }

@@ -25,6 +25,10 @@ public class ProductEntity extends BaseEntity {
     public static final String DRAFT = "DRAFT";
     public static final String PUBLISHED = "PUBLISHED";
     public static final String ARCHIVED = "ARCHIVED";
+    /** Đã xuất bản rồi ngừng xuất bản (khác DRAFT: chưa từng xuất bản). */
+    public static final String UNPUBLISHED = "UNPUBLISHED";
+    /** Ngừng kinh doanh. */
+    public static final String DISCONTINUED = "DISCONTINUED";
 
     @Id
     @PrimaryKey(generationType = GenerationType.SEQUENCE, generator = "products_id_seq")

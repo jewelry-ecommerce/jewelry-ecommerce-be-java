@@ -44,6 +44,11 @@ public final class TableConstant {
     public static final String PRODUCT_MEDIA = "product_media";
     // V18__pim_extended_fields.sql
     public static final String PRODUCT_INFOS = "product_infos";
+    public static final String CATEGORY_ATTRIBUTES = "category_attributes";
+    public static final String PRODUCT_ATTRIBUTE_VALUES = "product_attribute_values";
+    public static final String PRODUCT_APPROVAL_REQUESTS = "product_approval_requests";
+    public static final String IMPORT_EXPORT_JOBS = "import_export_jobs";
+    public static final String IMPORT_JOB_ROWS = "import_job_rows";
     public static final String PRODUCT_MIX_MATCHES = "product_mix_matches";
 
     // Admin - CMS (V2__admin_extensions.sql, mới 2026-09-29, chưa có entity, để sẵn hằng)

@@ -5,10 +5,24 @@ package com.pk.core.common.exception;
 public final class ErrorCode {
 
     public static final String ACCOUNT_DISABLED = "ACCOUNT_DISABLED";
+    public static final String BADGE_FLOW_LOCKED = "BADGE_FLOW_LOCKED";
+    public static final String BADGE_IN_USE = "BADGE_IN_USE";
+    public static final String BADGE_SCOPE_INVALID = "BADGE_SCOPE_INVALID";
+    public static final String CAROUSEL_SOURCE_INVALID = "CAROUSEL_SOURCE_INVALID";
+    public static final String CMS_SCHEDULE_INVALID = "CMS_SCHEDULE_INVALID";
+    public static final String APPROVAL_INVALID = "APPROVAL_INVALID";
+    public static final String APPROVAL_REQUIRED = "APPROVAL_REQUIRED";
+    public static final String PRODUCT_PENDING_APPROVAL = "PRODUCT_PENDING_APPROVAL";
     public static final String BELOW_RESERVED = "BELOW_RESERVED";
     public static final String CART_EMPTY = "CART_EMPTY";
     public static final String CART_ITEM_INVALID = "CART_ITEM_INVALID";
+    public static final String ATTRIBUTE_IN_USE = "ATTRIBUTE_IN_USE";
+    public static final String ATTRIBUTE_VALUE_INVALID = "ATTRIBUTE_VALUE_INVALID";
+    public static final String ATTRIBUTE_VALUE_IN_USE = "ATTRIBUTE_VALUE_IN_USE";
+    public static final String CATEGORY_ATTRIBUTE_INVALID = "CATEGORY_ATTRIBUTE_INVALID";
     public static final String CATEGORY_EXISTS = "CATEGORY_EXISTS";
+    public static final String CATEGORY_IN_USE = "CATEGORY_IN_USE";
+    public static final String CATEGORY_PARENT_INVALID = "CATEGORY_PARENT_INVALID";
     public static final String CONCURRENT_UPDATE = "CONCURRENT_UPDATE";
     public static final String DATA_CONFLICT = "DATA_CONFLICT";
     public static final String DUPLICATE_CODE = "DUPLICATE_CODE";

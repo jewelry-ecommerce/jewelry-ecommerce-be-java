@@ -60,9 +60,17 @@ public class ProductResponseDto extends BaseDto {
     private String metaDescription;
     private String metaKeywords;
     /** Khối thông tin bổ sung [{title, description, sortOrder}]; chỉ có ở chi tiết. */
-    private List<ProductInfoResponseDto> productInfos;
+    private List<ProductInfoResponseDto> productInfos = new ArrayList<>();
     /** Sản phẩm phối kèm; chỉ có ở chi tiết admin. */
     private List<ProductMixMatchResponseDto> productMixMatch;
+
+    /** Chỉ có ở API admin: yêu cầu duyệt mới nhất, cờ đang chờ duyệt, và (chi tiết) bản chờ duyệt kèm diff. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private ProductApprovalSummaryDto approval;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean hasPendingApproval;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Map<String, Object> pendingApproval;
 
     public ProductResponseDto(Long id, String code, String name, String slug, String shortDescription,
                               String description, String status, Long categoryId, String categoryName, String material,
@@ -183,8 +191,8 @@ public class ProductResponseDto extends BaseDto {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", String.valueOf(s.getId()));
         m.put("skuCode", s.getSkuCode());
-        m.put("image", thumbnailUrl);
-        m.put("imageHover", thumbnailUrl);
+        m.put("image", imageForSku(s.getId()));
+        m.put("imageHover", imageForSku(s.getId()));
         m.put("customerDisplayPrice", displayPrice(s));
         m.put("stockStatus", feStockStatus(s));
         return m;
@@ -248,6 +256,28 @@ public class ProductResponseDto extends BaseDto {
         return galleryFor(null);
     }
 
+    /** Ảnh đại diện của 1 SKU: ảnh riêng của SKU (ưu tiên isPrimary, rồi ảnh đầu) nếu có, không thì ảnh chung (thumbnail). */
+    private String imageForSku(Long skuId) {
+        if (media != null && skuId != null) {
+            String id = String.valueOf(skuId);
+            String first = null;
+            for (ProductMediaResponseDto m : media) {
+                if (id.equals(m.getSkuId()) && "IMAGE".equals(m.getType()) && m.getUrl() != null) {
+                    if (m.isPrimary()) {
+                        return m.getUrl();
+                    }
+                    if (first == null) {
+                        first = m.getUrl();
+                    }
+                }
+            }
+            if (first != null) {
+                return first;
+            }
+        }
+        return thumbnailUrl == null ? "" : thumbnailUrl;
+    }
+
     /** Gallery của 1 SKU: media riêng của SKU nếu có, không thì media chung; chưa có media thì dùng thumbnail. */
     private List<Map<String, Object>> galleryFor(Long skuId) {
         List<ProductMediaResponseDto> source = new ArrayList<>();
@@ -290,20 +320,25 @@ public class ProductResponseDto extends BaseDto {
 
     public Map<String, Object> getSeo() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("metaTitle", name);
-        m.put("metaDescription", shortDescription);
-        m.put("metaKeywords", null);
+        m.put("metaTitle", firstNonBlank(metaTitle, name));
+        m.put("metaDescription", firstNonBlank(metaDescription, shortDescription));
+        m.put("metaKeywords", firstNonBlank(metaKeywords, null));
         m.put("image", thumbnailUrl);
         return m;
     }
 
+    private static String firstNonBlank(String a, String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
     public Map<String, Object> getDimensions() {
         ProductSkuResponseDto s = defaultSku();
+        BigDecimal w = weightGram != null ? weightGram : (s == null ? null : s.getWeightGram());
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("weight", s == null || s.getWeightGram() == null ? null : s.getWeightGram().doubleValue());
-        m.put("length", null);
-        m.put("width", null);
-        m.put("height", null);
+        m.put("weight", w == null ? null : w.doubleValue());
+        m.put("length", length == null ? null : length.doubleValue());
+        m.put("width", width == null ? null : width.doubleValue());
+        m.put("height", height == null ? null : height.doubleValue());
         return m;
     }
 
@@ -393,7 +428,7 @@ public class ProductResponseDto extends BaseDto {
         v.put("stock", s.getAvailableStock());
         v.put("stockStatus", feStockStatus(s));
         v.put("isDefault", s.isDefault());
-        v.put("image", thumbnailUrl == null ? "" : thumbnailUrl);
+        v.put("image", imageForSku(s.getId()));
         v.put("gallery", galleryFor(s.getId()));
         List<Map<String, Object>> values = new ArrayList<>();
         Map<String, String> flat = new LinkedHashMap<>();
@@ -424,12 +459,12 @@ public class ProductResponseDto extends BaseDto {
                 def.put("name", b.get("name"));
                 def.put("code", code);
                 def.put("index", idx++);
-                def.put("displayType", "TEXT");
+                def.put("displayType", b.get("displayType") == null ? "TEXT" : b.get("displayType"));
                 Map<String, Object> av = new LinkedHashMap<>();
                 av.put("id", code + ":" + b.get("value"));
                 av.put("code", b.get("value"));
                 av.put("value", b.get("value"));
-                av.put("image", null);
+                av.put("image", b.get("imageUrl"));
                 av.put("attribute", def);
                 values.add(av);
                 flat.put(code, String.valueOf(b.get("value")));
@@ -538,10 +573,6 @@ public class ProductResponseDto extends BaseDto {
             selectors.add(sel);
         }
         return selectors;
-    }
-
-    public List<Object> getProductInfos() {
-        return new ArrayList<>();
     }
 
     // ---- ApiProduct (tìm kiếm / yêu thích) ----

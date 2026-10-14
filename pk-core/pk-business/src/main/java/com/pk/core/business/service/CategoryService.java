@@ -19,4 +19,7 @@ public interface CategoryService {
 
     /** Sửa danh mục - Admin Catalog mục J: PUT /admin/catalog/categories/{categoryId}. */
     CategoryResponseDto update(Long categoryId, AdminCategoryRequestDto req);
+
+    /** Xoá danh mục - DELETE /admin/catalog/categories/{categoryId}. 409 CATEGORY_IN_USE nếu còn danh mục con hoặc sản phẩm. */
+    void delete(Long categoryId);
 }

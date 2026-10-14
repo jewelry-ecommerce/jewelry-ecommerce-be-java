@@ -72,6 +72,32 @@ public class AdminCmsRest extends AbstractRest {
         }
     }
 
+    @PostMapping(UrlAdminConstant.Cms.PAGES + "/{pageId}/publish")
+    public BaseRes publishPage(@PathVariable Long pageId,
+                                HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(cmsService.publishPage(pageId));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PostMapping(UrlAdminConstant.Cms.PAGES + "/{pageId}/unpublish")
+    public BaseRes unpublishPage(@PathVariable Long pageId,
+                                  HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(cmsService.unpublishPage(pageId));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @DeleteMapping(UrlAdminConstant.Cms.PAGES + "/{pageId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePage(@PathVariable Long pageId) {
+        cmsService.deletePage(pageId);
+    }
+
     @PostMapping(UrlAdminConstant.Cms.PAGES + "/{pageId}/blocks")
     @ResponseStatus(HttpStatus.CREATED)
     public BaseRes addBlock(@PathVariable Long pageId, @Valid @RequestBody AdminCmsBlockRequestDto request,

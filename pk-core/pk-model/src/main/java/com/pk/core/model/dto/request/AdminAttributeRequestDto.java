@@ -1,8 +1,8 @@
 package com.pk.core.model.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -10,13 +10,12 @@ import lombok.Setter;
 import java.util.List;
 
 /** Tạo/sửa thuộc tính sản phẩm (Admin Catalog mục J: POST/PUT /admin/catalog/attributes).
- * `type`: TEXT/SELECT/MULTISELECT (xem {@code ProductAttributeEntity}). `options` chỉ bắt buộc có ý
- * nghĩa khi SELECT/MULTISELECT - CHƯA validate ràng buộc chéo type<->options ở tầng DTO (validate ở
- * service nếu cần chặt hơn), giữ đơn giản cho phạm vi đồ án. */
+ * `type`: TEXT/SELECT/MULTISELECT. `displayType`: TEXT|IMAGE (null = TEXT khi tạo, giữ nguyên khi sửa).
+ * `status`: ACTIVE|INACTIVE (null tương tự). Giá trị: gửi `values` (có id/code/ảnh) HOẶC `options` (chuỗi, cũ);
+ * cả hai null khi sửa = giữ nguyên giá trị hiện có. */
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class AdminAttributeRequestDto {
 
     @NotBlank(message = "Tên thuộc tính không được để trống")
@@ -29,4 +28,18 @@ public class AdminAttributeRequestDto {
     private String type;
 
     private List<@NotEmpty String> options;
+
+    private String displayType;
+
+    private String status;
+
+    @Valid
+    private List<AdminAttributeValueRequestDto> values;
+
+    public AdminAttributeRequestDto(String name, String code, String type, List<String> options) {
+        this.name = name;
+        this.code = code;
+        this.type = type;
+        this.options = options;
+    }
 }

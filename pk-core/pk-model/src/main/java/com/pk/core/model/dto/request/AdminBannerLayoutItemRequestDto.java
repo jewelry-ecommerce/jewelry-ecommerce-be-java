@@ -19,6 +19,7 @@ public class AdminBannerLayoutItemRequestDto {
     private Boolean isActive;
     /** Nhỏ hơn = hiển thị trước trong cùng slot (mặc định 0). */
     private Integer priority;
-    /** {x,y,width,height,order,slotType SINGLE_IMAGE|MULTIPLE_IMAGE,childBannerIds[]}; key khác được giữ nguyên. */
+    /** {x,y,width,height,order,slotType SINGLE_IMAGE|MULTIPLE_IMAGE,layoutType GRID|SLIDER|DOUBLE_BANNER,childBannerIds[]};
+     * key khác được giữ nguyên. Tên layout gửi nhầm vào slotType được tách sang layoutType. `slotKey` bỏ trống khi tạo = "main". */
     private Map<String, Object> displayMetadata;
 }

@@ -170,6 +170,19 @@ public class BannerLayoutSupport {
         return dto;
     }
 
+    /** displayType của vị trí -> layoutType chuẩn của builder (null nếu không thuộc 3 kiểu của builder). */
+    static String layoutTypeOf(String displayType) {
+        if (displayType == null) {
+            return null;
+        }
+        return switch (displayType.toUpperCase(java.util.Locale.ROOT)) {
+            case "GRID" -> "GRID";
+            case "SLIDER", "CAROUSEL" -> "SLIDER";
+            case "DOUBLE_BANNER" -> "DOUBLE_BANNER";
+            default -> null;
+        };
+    }
+
     private void buildSlots(BannerPlacementEntity p, BannerPlacementLayoutEntity layout,
                             List<Map<String, Object>> slots, List<BannerResponseDto> flat) {
         Map<String, List<BannerPlacementLayoutItemEntity>> bySlot = new LinkedHashMap<>();
@@ -218,6 +231,8 @@ public class BannerLayoutSupport {
             Map<String, Object> slot = new LinkedHashMap<>();
             slot.put("id", p.getCode() + "_" + e.getKey());
             slot.put("slot_key", e.getKey());
+            slot.put("layout_type", m.get("layoutType") != null ? String.valueOf(m.get("layoutType"))
+                    : layoutTypeOf(p.getDisplayType()));
             slot.put("slot_type", declared != null ? declared : (rendered.size() > 1 ? "MULTIPLE_IMAGE" : "SINGLE_IMAGE"));
             slot.put("layout_metadata", lm);
             slot.put("banners", rendered);

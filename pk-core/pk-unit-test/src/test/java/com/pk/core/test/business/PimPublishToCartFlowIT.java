@@ -88,7 +88,7 @@ class PimPublishToCartFlowIT extends IntegrationTestBase {
         // Unpublish -> biến mất khỏi storefront.
         mvc.perform(patch(CATALOG + "/" + ids[0] + "/unpublish").header("Authorization", auth))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("DRAFT"));
+                .andExpect(jsonPath("$.data.status").value("UNPUBLISHED"));
         mvc.perform(get(V1 + UrlConstant.Product.BASE + "/nhan-" + t)).andExpect(status().isNotFound());
     }
 

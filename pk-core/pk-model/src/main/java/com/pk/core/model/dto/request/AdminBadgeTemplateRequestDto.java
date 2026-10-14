@@ -12,8 +12,8 @@ import java.util.Map;
 
 /**
  * Body tạo (POST) và cập nhật một phần (PATCH) mẫu nhãn. Tạo dùng nhóm {@link OnCreate} (bắt buộc name, code, type,
- * badgeType); PATCH dùng nhóm mặc định - field null thì giữ nguyên, riêng code/status KHÔNG sửa qua PATCH (spec) và
- * các field mobile/assetMeta/icon/defaultPriorityWeight chỉ ghi lúc tạo.
+ * badgeType); PATCH dùng nhóm mặc định - field null thì giữ nguyên, riêng code KHÔNG sửa qua PATCH (spec). Xoá một
+ * field asset (icon/image/iconMobile/imageMobile): gửi chuỗi rỗng ""; assetMeta: gửi {}.
  */
 @Getter
 @Setter

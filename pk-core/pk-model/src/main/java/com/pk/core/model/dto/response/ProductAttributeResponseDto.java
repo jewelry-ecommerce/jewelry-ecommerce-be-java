@@ -22,6 +22,12 @@ public class ProductAttributeResponseDto extends UpdateDto {
     private String code;
     private String type;
     private List<String> options;
+    /** ACTIVE | INACTIVE. */
+    private String status;
+    /** TEXT | IMAGE. */
+    private String displayType;
+    /** Giá trị có id/code/ảnh (options chỉ là tên các giá trị, giữ cho FE cũ). */
+    private List<ProductAttributeValueResponseDto> values = new java.util.ArrayList<>();
 
     public static ProductAttributeResponseDto from(ProductAttributeEntity e) {
         ProductAttributeResponseDto dto = new ProductAttributeResponseDto();
@@ -30,7 +36,19 @@ public class ProductAttributeResponseDto extends UpdateDto {
         dto.setCode(e.getCode());
         dto.setType(e.getType());
         dto.setOptions(e.getOptionsList());
+        dto.setStatus(e.getStatus());
+        dto.setDisplayType(e.getDisplayType());
         dto.copyAudit(e);
+        return dto;
+    }
+
+    public static ProductAttributeResponseDto from(ProductAttributeEntity e,
+                                                   List<com.pk.core.model.entity.ProductAttributeValueEntity> valueRows) {
+        ProductAttributeResponseDto dto = from(e);
+        dto.setValues(valueRows.stream().map(ProductAttributeValueResponseDto::from).toList());
+        if (!valueRows.isEmpty()) {
+            dto.setOptions(valueRows.stream().map(com.pk.core.model.entity.ProductAttributeValueEntity::getValue).toList());
+        }
         return dto;
     }
 }

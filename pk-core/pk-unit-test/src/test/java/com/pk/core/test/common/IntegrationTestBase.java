@@ -8,6 +8,7 @@ import com.pk.core.model.entity.UserEntity;
 import com.pk.core.business.repository.UserRepo;
 import com.pk.core.service.PkServiceApplication;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -31,6 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest(classes = PkServiceApplication.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(RepoTxTestConfig.class)
 public abstract class IntegrationTestBase {
 
     protected static final String PASSWORD = "Password1!";

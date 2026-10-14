@@ -13,4 +13,7 @@ public interface ProductAttributeService {
     ProductAttributeResponseDto create(AdminAttributeRequestDto req);
 
     ProductAttributeResponseDto update(Long attributeId, AdminAttributeRequestDto req);
+
+    /** Xoá thuộc tính - DELETE /admin/catalog/attributes/{attributeId}. 409 ATTRIBUTE_IN_USE nếu còn SKU gán. */
+    void delete(Long attributeId);
 }

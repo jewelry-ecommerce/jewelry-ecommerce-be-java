@@ -207,12 +207,12 @@ class CmsBlocksControllerIT extends IntegrationTestBase {
     }
 
     @Test
-    void carouselTypesWithoutBackendDataReturnEmptyListInsteadOfError() throws Exception {
+    void carouselDataDrivenSourcesAreServedWithoutError() throws Exception {
         for (String filterType : List.of("BEST_SELLERS", "MOST_FAVORITED", "CAMPAIGN")) {
             mvc.perform(get(publishCarouselPage(Map.of("header", Map.of("title", filterType),
                             "dataSource", Map.of("filterType", filterType)))))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.blocks[0].content.products.length()").value(0));
+                    .andExpect(jsonPath("$.data.blocks[0].content.products").isArray());
         }
     }
 
@@ -252,6 +252,10 @@ class CmsBlocksControllerIT extends IntegrationTestBase {
                         .header("Authorization", admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.isVisible").value(true));
+        // Sửa block chỉ đổi bản nháp; phải xuất bản thì storefront mới thấy.
+        mvc.perform(get(url)).andExpect(jsonPath("$.data.blocks.length()").value(1));
+        mvc.perform(post(pagesPath() + "/" + page.get("id").asLong() + "/publish").header("Authorization", admin()))
+                .andExpect(status().isOk());
         mvc.perform(get(url)).andExpect(jsonPath("$.data.blocks.length()").value(2));
     }
 

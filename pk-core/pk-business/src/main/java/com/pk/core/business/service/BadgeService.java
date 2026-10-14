@@ -24,8 +24,14 @@ public interface BadgeService {
     /** GET /storefront/badge?skuIds=... - mỗi SKU tồn tại có 1 phần tử, `badges` rỗng nếu không khớp luật nào. */
     List<SkuBadgeResponseDto> forSkus(List<String> skuIds, String channel);
 
+    default BadgeTemplatePageResponseDto findTemplates(int page, int take, String status, String type, String badgeType,
+                                                       String defaultPosition) {
+        return findTemplates(page, take, status, type, badgeType, defaultPosition, null);
+    }
+
+    /** `search` lọc theo tên hoặc mã template (không phân biệt hoa thường). */
     BadgeTemplatePageResponseDto findTemplates(int page, int take, String status, String type, String badgeType,
-                                               String defaultPosition);
+                                               String defaultPosition, String search);
 
     BadgeTemplateResponseDto findTemplateById(String badgeId);
 
@@ -35,9 +41,17 @@ public interface BadgeService {
 
     void deleteTemplate(String badgeId);
 
-    BadgeFlowPageResponseDto findFlows(int page, int take, String status);
+    default BadgeFlowPageResponseDto findFlows(int page, int take, String status) {
+        return findFlows(page, take, status, null, null);
+    }
+
+    /** `search`: tên/mô tả chiến dịch; `displayStatus`: DRAFT | PAUSED | SCHEDULED | RUNNING | ENDED. counts tính trên tập đã lọc `search`. */
+    BadgeFlowPageResponseDto findFlows(int page, int take, String status, String search, String displayStatus);
 
     BadgeFlowResponseDto createFlow(AdminBadgeFlowRequestDto req);
 
     BadgeFlowResponseDto updateFlow(String flowId, AdminBadgeFlowRequestDto req);
+
+    /** Xoá luồng: 409 BADGE_FLOW_LOCKED nếu đang SCHEDULED/RUNNING (phải tạm dừng trước). */
+    void deleteFlow(String flowId);
 }

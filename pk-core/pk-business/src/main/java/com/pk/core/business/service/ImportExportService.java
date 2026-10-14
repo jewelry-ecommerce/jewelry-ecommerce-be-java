@@ -1,0 +1,26 @@
+package com.pk.core.business.service;
+
+import com.pk.core.common.web.PageResponse;
+import com.pk.core.model.dto.request.IeProductExportRequestDto;
+import com.pk.core.model.dto.response.IeJobResponseDto;
+import com.pk.core.model.dto.response.IeResultRowDto;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
+
+/** Import/export CSV sản phẩm + quản lý job (V24). Chạy đồng bộ; job lưu lại để tra cứu. */
+public interface ImportExportService {
+
+    /** Khai báo các chủ đề hỗ trợ + cờ fastFboSupported=false (Fast FBO không hỗ trợ). */
+    Map<String, Object> topics();
+
+    IeJobResponseDto exportProducts(IeProductExportRequestDto request, Long userId);
+
+    IeJobResponseDto importProducts(MultipartFile file, String referenceType, String referenceId, Long userId);
+
+    PageResponse<IeJobResponseDto> listJobs(String jobType, String status, int page, int take);
+
+    IeJobResponseDto getJob(Long jobId);
+
+    PageResponse<IeResultRowDto> resultRows(Long jobId, String status, int page, int take);
+}

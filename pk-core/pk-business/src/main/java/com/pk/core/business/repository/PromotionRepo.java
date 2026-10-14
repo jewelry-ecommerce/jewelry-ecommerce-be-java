@@ -18,6 +18,9 @@ public interface PromotionRepo extends PkRepo<PromotionEntity, Long> {
 
     List<Long> findProductIdsByPromotionId(@Param("promotionId") Long promotionId);
 
+    /** Id sản phẩm thuộc ít nhất 1 khuyến mãi đang hiệu lực tại `now` (carousel CAMPAIGN không chọn chương trình). */
+    List<Long> findActiveProductIds(@Param("now") Date now);
+
     @Modifying
     int addProduct(@Param("promotionId") Long promotionId, @Param("productId") Long productId);
 

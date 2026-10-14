@@ -10,6 +10,8 @@ SELECT p.*
            JOIN collections col ON col.id = pc.collection_id
           WHERE pc.product_id = p.id
             AND col.slug = /*collectionSlug*/''
+            AND col.status = 'PUBLISHED'
+            AND col.deleted_date IS NULL
        ))
    AND (/*keyword*/'' = '' OR LOWER(p.name) LIKE LOWER('%'||/*keyword*/''||'%') OR LOWER(p.code) LIKE LOWER('%'||/*keyword*/''||'%'))
    AND (/*material*/'' = '' OR LOWER(p.material) = LOWER(/*material*/''))

@@ -16,6 +16,9 @@ public interface ProductRepo extends PkRepo<ProductEntity, Long> {
      * cho tạo lại trùng code - tránh 2 sản phẩm khác nhau cùng 1 mã dù 1 cái đã xoá). */
     ProductEntity findByCode(@Param("code") String code);
 
+    /** Số sản phẩm thuộc danh mục, TÍNH CẢ đã xoá mềm (FK category_id vẫn còn nên không xoá cứng được danh mục). */
+    Long countByCategoryId(@Param("categoryId") Long categoryId);
+
     /** Danh sách sản phẩm cho ADMIN (Admin Catalog mục J: GET /admin/catalog/products) - KHÔNG giới
      * hạn status=PUBLISHED như {@link #searchPublished} storefront, loại trừ deleted_date. Lọc rỗng
      * ("" cho mọi tham số chuỗi, kể cả status) = không lọc, cùng quy ước tránh cú pháp IF/END của
@@ -23,6 +26,12 @@ public interface ProductRepo extends PkRepo<ProductEntity, Long> {
      * Java (PageResponse.paginate), giống searchPublished. */
     List<ProductEntity> searchAdmin(@Param("status") String status, @Param("categorySlug") String categorySlug,
                                      @Param("collectionSlug") String collectionSlug, @Param("keyword") String keyword);
+
+    /** Sản phẩm PUBLISHED xếp theo số lượng bán giảm dần (đơn CONFIRMED/SHIPPING/DELIVERED, đã trừ hàng trả) - dùng cho sort BEST_SELLING. */
+    List<ProductEntity> findPublishedBySold();
+
+    /** Sản phẩm PUBLISHED có ít nhất 1 lượt yêu thích, xếp theo số lượt giảm dần (carousel MOST_FAVORITED). */
+    List<ProductEntity> findPublishedByFavorites();
 
     /** Chỉ trả sản phẩm PUBLISHED. Lọc rỗng ("" cho chuỗi, 0/số rất lớn cho khoảng giá) = không lọc
      * (tránh dùng khối IF/END của Mirage 2-way SQL vì chưa có tiền lệ đã kiểm chứng trong dự án -

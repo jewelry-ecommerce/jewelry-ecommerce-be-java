@@ -37,7 +37,11 @@ public class BannerLayoutServiceImpl implements BannerLayoutService {
 
     private static final Set<String> STATUSES = Set.of("DRAFT", "SCHEDULED", "ACTIVE", "INACTIVE", "ARCHIVED");
     private static final Set<String> SLOT_TYPES = Set.of("SINGLE_IMAGE", "MULTIPLE_IMAGE");
+    /** Tên kiểu layout của builder (có thể bị FE gửi nhầm vào slotType) -> tên chuẩn của layoutType. */
+    private static final Map<String, String> LAYOUT_TYPES = Map.of("GRID", "GRID", "SLIDER", "SLIDER",
+            "CAROUSEL", "SLIDER", "DOUBLE_BANNER", "DOUBLE_BANNER", "DOUBLE", "DOUBLE_BANNER");
     private static final Set<String> SINGLE_SLOT_TYPES = Set.of("SLIDER", "CAROUSEL", "POPUP", "SINGLE");
+    static final String DEFAULT_SLOT_KEY = "main";
     private static final Pattern SLOT_KEY = Pattern.compile("[A-Za-z0-9_-]{1,60}");
 
     private final BannerPlacementRepo placements;
@@ -185,7 +189,8 @@ public class BannerLayoutServiceImpl implements BannerLayoutService {
             }
             it.setSlotKey(key);
         } else if (creating) {
-            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Mỗi item cần slotKey");
+            // Slider / banner đơn không có khái niệm slot: mọi slide dùng chung slot mặc định "main".
+            it.setSlotKey(DEFAULT_SLOT_KEY);
         }
         if (r.getBannerId() != null) {
             requireBanner(r.getBannerId());
@@ -238,13 +243,34 @@ public class BannerLayoutServiceImpl implements BannerLayoutService {
         if (in.get("order") != null) {
             out.put("order", BannerLayoutSupport.intOf(in.get("order"), "displayMetadata.order", 0, 100000));
         }
+        // Hợp đồng: `layoutType` (GRID | SLIDER | DOUBLE_BANNER) là kiểu layout của builder; `slotType`
+        // (SINGLE_IMAGE | MULTIPLE_IMAGE) chỉ nói slot chứa 1 hay nhiều ảnh. Nếu FE gửi tên layout vào slotType thì
+        // tách ra layoutType (SLIDER => MULTIPLE_IMAGE; GRID/DOUBLE_BANNER => để backend suy ra theo số ảnh).
+        if (in.get("layoutType") != null) {
+            String lt = LAYOUT_TYPES.get(String.valueOf(in.get("layoutType")).trim().toUpperCase(Locale.ROOT));
+            if (lt == null) {
+                throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                        "displayMetadata.layoutType chỉ nhận GRID | SLIDER | DOUBLE_BANNER", in.get("layoutType"));
+            }
+            out.put("layoutType", lt);
+        }
         if (in.get("slotType") != null) {
             String t = String.valueOf(in.get("slotType")).trim().toUpperCase(Locale.ROOT);
-            if (!SLOT_TYPES.contains(t)) {
+            if (LAYOUT_TYPES.containsKey(t)) {
+                String lt = LAYOUT_TYPES.get(t);
+                out.putIfAbsent("layoutType", lt);
+                if ("SLIDER".equals(lt)) {
+                    out.put("slotType", "MULTIPLE_IMAGE");
+                } else {
+                    out.remove("slotType");
+                }
+            } else if (SLOT_TYPES.contains(t)) {
+                out.put("slotType", t);
+            } else {
                 throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
-                        "displayMetadata.slotType chỉ nhận SINGLE_IMAGE | MULTIPLE_IMAGE", in.get("slotType"));
+                        "displayMetadata.slotType chỉ nhận SINGLE_IMAGE | MULTIPLE_IMAGE (kiểu layout GRID | SLIDER | DOUBLE_BANNER"
+                                + " gửi ở displayMetadata.layoutType)", in.get("slotType"));
             }
-            out.put("slotType", t);
         }
         if (in.get("childBannerIds") != null) {
             if (!(in.get("childBannerIds") instanceof List<?> ids)) {

@@ -46,10 +46,11 @@ public class AdminBadgeRest extends AbstractRest {
                                   @RequestParam(required = false) String type,
                                   @RequestParam(required = false) String badgeType,
                                   @RequestParam(required = false) String defaultPosition,
+                                  @RequestParam(required = false) String search,
                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(
-                    badgeService.findTemplates(page, take, status, type, badgeType, defaultPosition));
+                    badgeService.findTemplates(page, take, status, type, badgeType, defaultPosition, search));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -104,9 +105,11 @@ public class AdminBadgeRest extends AbstractRest {
     public BaseRes listFlows(@RequestParam(defaultValue = "1") int page,
                               @RequestParam(defaultValue = "20") int take,
                               @RequestParam(required = false) String status,
+                              @RequestParam(required = false) String search,
+                              @RequestParam(required = false) String displayStatus,
                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(badgeService.findFlows(page, take, status));
+            return restSuccessHandle.handleSuccess(badgeService.findFlows(page, take, status, search, displayStatus));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -127,6 +130,17 @@ public class AdminBadgeRest extends AbstractRest {
                                HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(badgeService.updateFlow(flowId, request));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @DeleteMapping(UrlAdminConstant.Badge.FLOW + "/{flowId}")
+    public BaseRes deleteFlow(@PathVariable String flowId,
+                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            badgeService.deleteFlow(flowId);
+            return restSuccessHandle.handleSuccess(MessageResponseDto.ok("Đã xóa luồng nhãn."));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

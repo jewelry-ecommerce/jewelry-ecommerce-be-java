@@ -4,13 +4,17 @@ import lombok.RequiredArgsConstructor;
 
 import com.pk.core.business.repository.CategoryRepo;
 import com.pk.core.business.repository.CollectionRepo;
+import com.pk.core.business.repository.ProductApprovalRequestRepo;
 import com.pk.core.business.repository.ProductAttributeRepo;
+import com.pk.core.business.repository.ProductAttributeValueRepo;
 import com.pk.core.business.repository.ProductInfoRepo;
 import com.pk.core.business.repository.ProductMediaRepo;
 import com.pk.core.business.repository.ProductMixMatchRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
 import com.pk.core.business.repository.SkuAttributeValueRepo;
+import com.pk.core.business.service.AdminProductQuery;
+import com.pk.core.business.service.ProductSearchQuery;
 import com.pk.core.business.service.ProductService;
 import com.pk.core.business.service.PromotionPricingService;
 import com.pk.core.common.exception.BusinessException;
@@ -25,16 +29,21 @@ import com.pk.core.model.dto.request.AdminSkuRequestDto;
 import com.pk.core.model.dto.request.AdminUpdateProductRequestDto;
 import com.pk.core.model.dto.response.CategoryResponseDto;
 import com.pk.core.model.dto.response.CollectionResponseDto;
+import com.pk.core.model.dto.response.ProductApprovalSummaryDto;
 import com.pk.core.model.dto.response.ProductInfoResponseDto;
 import com.pk.core.model.dto.response.ProductMediaResponseDto;
 import com.pk.core.model.dto.response.ProductMixMatchResponseDto;
 import com.pk.core.model.dto.response.ProductResponseDto;
+import com.pk.core.model.dto.response.ProductCountsDto;
+import com.pk.core.model.dto.response.ProductFilterSectionDto;
 import com.pk.core.model.dto.response.ProductSkuResponseDto;
 import com.pk.core.model.entity.CategoryEntity;
+import com.pk.core.model.entity.ProductApprovalRequestEntity;
 import com.pk.core.model.entity.ProductEntity;
 import com.pk.core.model.entity.ProductInfoEntity;
 import com.pk.core.model.entity.ProductMixMatchEntity;
 import com.pk.core.model.entity.ProductAttributeEntity;
+import com.pk.core.model.entity.ProductAttributeValueEntity;
 import com.pk.core.model.entity.ProductSkuEntity;
 import com.pk.core.model.entity.SkuAttributeValueEntity;
 import org.springframework.stereotype.Service;
@@ -59,11 +68,14 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
 
+    private static final Set<String> ADMIN_STATUSES = Set.of(ProductEntity.DRAFT, ProductEntity.UNPUBLISHED,
+            ProductEntity.PUBLISHED, ProductEntity.DISCONTINUED, ProductEntity.ARCHIVED);
     private static final BigDecimal NO_MAX_PRICE = new BigDecimal("999999999999");
 
     private final ProductRepo products;
     private final ProductSkuRepo productSkus;
     private final CategoryRepo categories;
+    private final ProductAttributeValueRepo attributeValues;
     private final CollectionRepo collections;
     private final PromotionPricingService promotionPricing;
     private final ProductAttributeRepo attributeDefs;
@@ -71,17 +83,28 @@ public class ProductServiceImpl implements ProductService {
     private final ProductMediaRepo productMedia;
     private final ProductInfoRepo productInfos;
     private final ProductMixMatchRepo mixMatches;
+    private final ProductApprovalRequestRepo approvalRequests;
+    private final ProductApprovalSupport approvalSupport;
+
+    /** true: publish trực tiếp bị chặn (409 APPROVAL_REQUIRED), phải gửi duyệt. Mặc định false (demo: lưu nháp -> xuất bản). */
+    @org.springframework.beans.factory.annotation.Value("${app.pim.require-approval:false}")
+    private boolean requireApproval;
 
     @Transactional(readOnly = true)
     @Override
     public ProductResponseDto findBySlug(String slug) {
         ProductEntity p = products.findBySlug(slug);
-        if (p == null || !p.isPublished()) {
+        if (p == null || !p.isPublished()
+                || !new CategoryScope(categories.findAll(org.springframework.data.domain.Sort.unsorted())).visible(p.getCategoryId())) {
             throw new ResourceNotFoundException("Sản phẩm", "Product", slug);
         }
         ProductResponseDto dto = toDto(p);
         // Trang chi tiết storefront: SEO + thông tin bổ sung + đơn vị tính (không có thuế/giá vốn/giá sỉ).
         dto.setUnitOfMeasure(p.getUnitOfMeasure());
+        dto.setWeightGram(p.getWeightGram());
+        dto.setLength(p.getLength());
+        dto.setWidth(p.getWidth());
+        dto.setHeight(p.getHeight());
         dto.setMetaTitle(p.getMetaTitle());
         dto.setMetaDescription(p.getMetaDescription());
         dto.setMetaKeywords(p.getMetaKeywords());
@@ -94,16 +117,163 @@ public class ProductServiceImpl implements ProductService {
     public PageResponse<ProductResponseDto> search(String categorySlug, String collectionSlug, String keyword,
                                                      String material, BigDecimal minPrice, BigDecimal maxPrice,
                                                      String sort, int page, int take) {
-        List<ProductEntity> matched = products.searchPublished(
-                nullToEmpty(categorySlug), nullToEmpty(collectionSlug), nullToEmpty(keyword), nullToEmpty(material),
-                minPrice != null ? minPrice : BigDecimal.ZERO,
-                maxPrice != null ? maxPrice : NO_MAX_PRICE);
+        return search(new ProductSearchQuery(categorySlug, List.of(), collectionSlug, keyword, material, minPrice,
+                maxPrice, List.of(), null, sort, page, take));
+    }
 
-        List<ProductResponseDto> dtos = matched.stream().map(this::toDto).toList();
-        dtos = sortDtos(dtos, sort);
-
+    @Transactional(readOnly = true)
+    @Override
+    public PageResponse<ProductResponseDto> search(ProductSearchQuery q) {
+        List<ProductResponseDto> dtos = matchStorefront(q, true);
+        dtos = sortDtos(dtos, q.sort());
         // page 1-based, take mặc định 20 tối đa 100 (quy ước chung, xem PageResponse.paginate).
-        return PageResponse.paginate(dtos, page, take);
+        return PageResponse.paginate(dtos, q.page(), q.take());
+    }
+
+    /**
+     * Sản phẩm khớp điều kiện storefront. Giá lọc theo GIÁ HIỂN THỊ (priceFrom đã trừ khuyến mãi) chứ không phải
+     * base_price; danh mục lọc kèm danh mục con; danh mục ẩn (hoặc có tổ tiên ẩn) bị loại.
+     */
+    private List<ProductResponseDto> matchStorefront(ProductSearchQuery q, boolean applyAttributes) {
+        CategoryScope scope = new CategoryScope(categories.findAll(org.springframework.data.domain.Sort.unsorted()));
+        Set<String> slugs = new LinkedHashSet<>();
+        if (q.categorySlug() != null && !q.categorySlug().isBlank()) {
+            slugs.add(q.categorySlug().trim());
+        }
+        if (q.categorySlugs() != null) {
+            for (String s : q.categorySlugs()) {
+                if (s != null && !s.isBlank()) {
+                    slugs.add(s.trim());
+                }
+            }
+        }
+        Set<Long> allowedCategories = slugs.isEmpty() ? null : scope.idsForSlugs(slugs);
+
+        List<ProductEntity> matched = products.searchPublished("", nullToEmpty(q.collectionSlug()),
+                nullToEmpty(q.keyword()), nullToEmpty(q.material()), BigDecimal.ZERO, NO_MAX_PRICE);
+
+        List<ProductResponseDto> dtos = new ArrayList<>();
+        for (ProductEntity p : matched) {
+            if (!scope.visible(p.getCategoryId())) {
+                continue;
+            }
+            if (allowedCategories != null && !allowedCategories.contains(p.getCategoryId())) {
+                continue;
+            }
+            ProductResponseDto dto = toDto(p);
+            BigDecimal price = dto.getPriceFrom();
+            if (q.minPrice() != null && (price == null || price.compareTo(q.minPrice()) < 0)) {
+                continue;
+            }
+            if (q.maxPrice() != null && (price == null || price.compareTo(q.maxPrice()) > 0)) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(q.inStock()) && dto.getSkus().stream().noneMatch(s -> s.getAvailableStock() > 0)) {
+                continue;
+            }
+            dtos.add(dto);
+        }
+        if (applyAttributes && q.attributeValueIds() != null && !q.attributeValueIds().isEmpty()) {
+            dtos = filterByAttributeValues(dtos, q.attributeValueIds());
+        }
+        return dtos;
+    }
+
+    /** Dòng giá trị SKU của các sản phẩm đang xét, gom theo sản phẩm -> thuộc tính -> tập giá trị (đã tách "||"). */
+    private Map<Long, Map<Long, Set<String>>> attributeTokensByProduct(List<ProductResponseDto> dtos) {
+        Map<Long, Long> productOfSku = new java.util.HashMap<>();
+        for (ProductResponseDto d : dtos) {
+            for (ProductSkuResponseDto s : d.getSkus()) {
+                productOfSku.put(s.getId(), d.getId());
+            }
+        }
+        Map<Long, Map<Long, Set<String>>> out = new java.util.HashMap<>();
+        for (SkuAttributeValueEntity row : skuAttributes.findAll(org.springframework.data.domain.Sort.unsorted())) {
+            Long productId = productOfSku.get(row.getSkuId());
+            if (productId == null || row.getValue() == null) {
+                continue;
+            }
+            Set<String> tokens = out.computeIfAbsent(productId, k -> new java.util.HashMap<>())
+                    .computeIfAbsent(row.getAttributeId(), k -> new LinkedHashSet<>());
+            tokens.addAll(List.of(row.getValue().split("\\|\\|")));
+        }
+        return out;
+    }
+
+    private List<ProductResponseDto> filterByAttributeValues(List<ProductResponseDto> dtos, List<Long> valueIds) {
+        Map<Long, ProductAttributeValueEntity> optionById = new java.util.HashMap<>();
+        for (ProductAttributeValueEntity v : attributeValues.findAll(org.springframework.data.domain.Sort.unsorted())) {
+            optionById.put(v.getId(), v);
+        }
+        // attributeId -> các giá trị được chọn (HOẶC trong cùng thuộc tính, VÀ giữa các thuộc tính).
+        Map<Long, Set<String>> wanted = new LinkedHashMap<>();
+        for (Long id : valueIds) {
+            ProductAttributeValueEntity v = optionById.get(id);
+            if (v == null) {
+                return List.of(); // id lạ -> không khớp sản phẩm nào (không bỏ qua im lặng)
+            }
+            wanted.computeIfAbsent(v.getAttributeId(), k -> new LinkedHashSet<>()).add(v.getValue());
+        }
+        Map<Long, Map<Long, Set<String>>> tokens = attributeTokensByProduct(dtos);
+        List<ProductResponseDto> out = new ArrayList<>();
+        for (ProductResponseDto d : dtos) {
+            Map<Long, Set<String>> have = tokens.getOrDefault(d.getId(), Map.of());
+            boolean ok = true;
+            for (Map.Entry<Long, Set<String>> w : wanted.entrySet()) {
+                Set<String> present = have.getOrDefault(w.getKey(), Set.of());
+                if (w.getValue().stream().noneMatch(present::contains)) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) {
+                out.add(d);
+            }
+        }
+        return out;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<ProductFilterSectionDto> filters(ProductSearchQuery q) {
+        List<ProductResponseDto> base = matchStorefront(q.withoutAttributes(), false);
+        Map<Long, Map<Long, Set<String>>> tokens = attributeTokensByProduct(base);
+        Map<Long, List<ProductAttributeValueEntity>> valuesByAttribute = new LinkedHashMap<>();
+        for (ProductAttributeValueEntity v : attributeValues.findAll(org.springframework.data.domain.Sort.unsorted())) {
+            valuesByAttribute.computeIfAbsent(v.getAttributeId(), k -> new ArrayList<>()).add(v);
+        }
+        List<ProductAttributeEntity> defs = new ArrayList<>(attributeDefs.findAll(org.springframework.data.domain.Sort.unsorted()));
+        defs.sort(Comparator.comparing(ProductAttributeEntity::getId));
+
+        List<ProductFilterSectionDto> sections = new ArrayList<>();
+        for (ProductAttributeEntity def : defs) {
+            if (!ProductAttributeEntity.ACTIVE.equals(def.getStatus())
+                    || ProductAttributeEntity.TEXT.equals(def.getType())) {
+                continue;
+            }
+            List<ProductAttributeValueEntity> values = new ArrayList<>(valuesByAttribute.getOrDefault(def.getId(), List.of()));
+            values.sort(Comparator.comparingInt(ProductAttributeValueEntity::getSortOrder)
+                    .thenComparing(ProductAttributeValueEntity::getId));
+            List<ProductFilterSectionDto.Option> options = new ArrayList<>();
+            for (ProductAttributeValueEntity v : values) {
+                int count = 0;
+                for (ProductResponseDto d : base) {
+                    Set<String> present = tokens.getOrDefault(d.getId(), Map.of()).getOrDefault(def.getId(), Set.of());
+                    if (present.contains(v.getValue())) {
+                        count++;
+                    }
+                }
+                if (count > 0) {
+                    options.add(new ProductFilterSectionDto.Option(String.valueOf(v.getId()), v.getValue(), count,
+                            v.getCode(), v.getImageUrl()));
+                }
+            }
+            if (!options.isEmpty()) {
+                sections.add(new ProductFilterSectionDto(String.valueOf(def.getId()), def.getName(), def.getCode(),
+                        def.getDisplayType(), options));
+            }
+        }
+        return sections;
     }
 
     private List<ProductResponseDto> sortDtos(List<ProductResponseDto> dtos, String sort) {
@@ -113,6 +283,18 @@ public class ProductServiceImpl implements ProductService {
                     Comparator.nullsLast(Comparator.naturalOrder()));
             case "PRICE_DESC" -> Comparator.comparing(ProductResponseDto::getPriceFrom,
                     Comparator.nullsLast(Comparator.naturalOrder())).reversed();
+            case "NAME", "NAME_ASC" -> Comparator.comparing(ProductResponseDto::getName,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            case "NAME_DESC" -> Comparator.comparing(ProductResponseDto::getName,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)).reversed();
+            case "BEST_SELLING" -> {
+                Map<Long, Integer> rank = new java.util.HashMap<>();
+                int i = 0;
+                for (ProductEntity p : products.findPublishedBySold()) {
+                    rank.put(p.getId(), i++);
+                }
+                yield Comparator.comparingInt((ProductResponseDto d) -> rank.getOrDefault(d.getId(), Integer.MAX_VALUE));
+            }
             // "NEWEST" và "RATING_DESC" (chưa có cột rating, tạm coi như NEWEST) đều rơi vào đây.
             default -> Comparator.comparing(ProductResponseDto::getPublishedAt,
                     Comparator.nullsLast(Comparator.naturalOrder())).reversed();
@@ -170,13 +352,157 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public PageResponse<ProductResponseDto> searchForAdmin(String status, String categorySlug, String collectionSlug,
                                                              String keyword, int page, int take) {
-        List<ProductEntity> matched = products.searchAdmin(nullToEmpty(status).toUpperCase(),
-                nullToEmpty(categorySlug), nullToEmpty(collectionSlug), nullToEmpty(keyword));
-        List<ProductResponseDto> dtos = matched.stream()
+        return searchForAdmin(new AdminProductQuery(status, categorySlug, collectionSlug, keyword, null, null, null,
+                null, null, null, null, null, null, page, take));
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public PageResponse<ProductResponseDto> searchForAdmin(AdminProductQuery q) {
+        List<ProductResponseDto> dtos = adminMatch(q).stream()
                 .sorted(Comparator.comparing(ProductEntity::getId).reversed())
                 .map(this::toAdminDto)
                 .toList();
-        return PageResponse.paginate(dtos, page, take);
+        return PageResponse.paginate(dtos, q.page(), q.take());
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public ProductCountsDto countsForAdmin(AdminProductQuery q) {
+        Map<String, Long> by = new java.util.HashMap<>();
+        Map<String, Long> byApproval = new java.util.HashMap<>();
+        for (ProductEntity p : adminMatch(q.withoutStatusAndApproval())) {
+            by.merge(p.getStatus(), 1L, Long::sum);
+            String latest = latestApprovalStatus(p.getId());
+            if (latest != null) {
+                byApproval.merge(latest, 1L, Long::sum);
+            }
+        }
+        long all = by.values().stream().mapToLong(Long::longValue).sum();
+        ProductCountsDto counts = new ProductCountsDto(all, by.getOrDefault(ProductEntity.DRAFT, 0L),
+                by.getOrDefault(ProductEntity.UNPUBLISHED, 0L), by.getOrDefault(ProductEntity.PUBLISHED, 0L),
+                by.getOrDefault(ProductEntity.DISCONTINUED, 0L), by.getOrDefault(ProductEntity.ARCHIVED, 0L));
+        counts.setHasPendingApproval(byApproval.getOrDefault(ProductApprovalRequestEntity.PENDING, 0L));
+        counts.setApprovalApproved(byApproval.getOrDefault(ProductApprovalRequestEntity.APPROVED, 0L));
+        counts.setApprovalRejected(byApproval.getOrDefault(ProductApprovalRequestEntity.REJECTED, 0L));
+        counts.setApprovalCancelled(byApproval.getOrDefault(ProductApprovalRequestEntity.CANCELLED, 0L));
+        return counts;
+    }
+
+    private static final java.time.ZoneId ZONE = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
+
+    /** SQL lọc status/danh mục/bộ sưu tập/từ khoá; giá và thời gian lọc tiếp ở Java. */
+    private List<ProductEntity> adminMatch(AdminProductQuery q) {
+        String status = nullToEmpty(q.status()).toUpperCase();
+        if ("ALL".equals(status)) {
+            status = "";
+        }
+        if (!status.isEmpty() && !ADMIN_STATUSES.contains(status)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "status không hợp lệ: " + q.status() + " (DRAFT | UNPUBLISHED | PUBLISHED | DISCONTINUED | ARCHIVED)",
+                    q.status());
+        }
+        java.time.Instant[] time = resolveTimeRange(q.timeFilter(), q.timeFrom(), q.timeTo());
+        java.time.Instant createdFrom = parseInstant(q.createdFrom(), false);
+        java.time.Instant createdTo = parseInstant(q.createdTo(), true);
+        java.time.Instant updatedFrom = parseInstant(q.updatedFrom(), false);
+        java.time.Instant updatedTo = parseInstant(q.updatedTo(), true);
+        if (q.minPrice() != null && q.maxPrice() != null && q.minPrice().compareTo(q.maxPrice()) > 0) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "minPrice không được lớn hơn maxPrice");
+        }
+
+        String approvalFilter = nullToEmpty(q.approvalStatus()).isBlank() ? null : q.approvalStatus().trim().toUpperCase();
+        if (approvalFilter != null && !Set.of("PENDING", "APPROVED", "REJECTED", "CANCELLED").contains(approvalFilter)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "approvalStatus không hợp lệ: " + q.approvalStatus() + " (PENDING | APPROVED | REJECTED | CANCELLED)",
+                    q.approvalStatus());
+        }
+        List<ProductEntity> out = new ArrayList<>();
+        for (ProductEntity p : products.searchAdmin(status, nullToEmpty(q.categorySlug()),
+                nullToEmpty(q.collectionSlug()), nullToEmpty(q.keyword()))) {
+            if (q.minPrice() != null && (p.getBasePrice() == null || p.getBasePrice().compareTo(q.minPrice()) < 0)) {
+                continue;
+            }
+            if (q.maxPrice() != null && (p.getBasePrice() == null || p.getBasePrice().compareTo(q.maxPrice()) > 0)) {
+                continue;
+            }
+            if (approvalFilter != null || q.hasPendingApproval() != null) {
+                String latest = latestApprovalStatus(p.getId());
+                if (approvalFilter != null && !approvalFilter.equals(latest)) {
+                    continue;
+                }
+                if (q.hasPendingApproval() != null
+                        && q.hasPendingApproval() != ProductApprovalRequestEntity.PENDING.equals(latest)) {
+                    continue;
+                }
+            }
+            if (!within(p.getCreatedDate(), time[0], time[1]) || !within(p.getCreatedDate(), createdFrom, createdTo)
+                    || !within(p.getUpdatedDate() != null ? p.getUpdatedDate() : p.getCreatedDate(), updatedFrom,
+                    updatedTo)) {
+                continue;
+            }
+            out.add(p);
+        }
+        return out;
+    }
+
+    /** Trạng thái của yêu cầu duyệt mới nhất (null = chưa từng gửi duyệt). */
+    private String latestApprovalStatus(Long productId) {
+        List<ProductApprovalRequestEntity> history = approvalRequests.findByProductId(productId);
+        return history.isEmpty() ? null : history.get(0).getStatus();
+    }
+
+    private static boolean within(Date value, java.time.Instant from, java.time.Instant to) {
+        if (from == null && to == null) {
+            return true;
+        }
+        if (value == null) {
+            return false;
+        }
+        java.time.Instant v = value.toInstant();
+        return (from == null || !v.isBefore(from)) && (to == null || v.isBefore(to));
+    }
+
+    /** [from, to) theo giờ Việt Nam; null = không giới hạn. */
+    private static java.time.Instant[] resolveTimeRange(String filter, String from, String to) {
+        String f = filter == null ? "" : filter.trim().toUpperCase();
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(ZONE);
+        java.time.ZonedDateTime today = now.toLocalDate().atStartOfDay(ZONE);
+        return switch (f) {
+            case "" -> new java.time.Instant[] {parseInstant(from, false), parseInstant(to, true)};
+            case "TODAY" -> new java.time.Instant[] {today.toInstant(), today.plusDays(1).toInstant()};
+            case "YESTERDAY" -> new java.time.Instant[] {today.minusDays(1).toInstant(), today.toInstant()};
+            case "LAST_7_DAYS" -> new java.time.Instant[] {today.minusDays(6).toInstant(), today.plusDays(1).toInstant()};
+            case "LAST_30_DAYS" -> new java.time.Instant[] {today.minusDays(29).toInstant(), today.plusDays(1).toInstant()};
+            case "LAST_90_DAYS" -> new java.time.Instant[] {today.minusDays(89).toInstant(), today.plusDays(1).toInstant()};
+            case "THIS_MONTH" -> new java.time.Instant[] {today.withDayOfMonth(1).toInstant(), today.plusDays(1).toInstant()};
+            case "LAST_MONTH" -> new java.time.Instant[] {today.withDayOfMonth(1).minusMonths(1).toInstant(),
+                    today.withDayOfMonth(1).toInstant()};
+            case "CUSTOM" -> new java.time.Instant[] {parseInstant(from, false), parseInstant(to, true)};
+            default -> throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "timeFilter không hợp lệ: " + filter, filter);
+        };
+    }
+
+    /** yyyy-MM-dd hoặc ISO date-time/instant. `endExclusive`: ngày thuần -> đầu ngày kế tiếp (gồm cả ngày `to`). */
+    private static java.time.Instant parseInstant(String text, boolean endExclusive) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String t = text.trim();
+        try {
+            if (t.length() <= 10) {
+                java.time.ZonedDateTime d = java.time.LocalDate.parse(t).atStartOfDay(ZONE);
+                return (endExclusive ? d.plusDays(1) : d).toInstant();
+            }
+            try {
+                return java.time.Instant.parse(t);
+            } catch (java.time.format.DateTimeParseException ignore) {
+                return java.time.LocalDateTime.parse(t).atZone(ZONE).toInstant();
+            }
+        } catch (java.time.format.DateTimeParseException ex) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Ngày không hợp lệ: " + text, text);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -250,6 +576,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductResponseDto update(Long productId, AdminUpdateProductRequestDto req) {
         ProductEntity p = requireProduct(productId);
+        assertNoPending(productId);
         if (req.getCode() != null && !req.getCode().isBlank() && !req.getCode().trim().equals(p.getCode())) {
             throw BusinessException.badRequest("CODE_IMMUTABLE",
                     "Không đổi được mã sản phẩm (hiện là " + p.getCode() + ")", req.getCode());
@@ -280,6 +607,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public void softDelete(Long productId) {
         ProductEntity p = requireProduct(productId);
+        assertNoPending(productId);
         // deletedId (ai xoá) CHƯA gán được - service không có principal, cần truyền actor id từ Rest
         // qua @AuthenticationPrincipal nếu sau này cần audit chi tiết; để null hiện tại, tương tự
         // cách project đang bỏ ngỏ actor cho vài audit khác (xem OrderTimeline.actor).
@@ -292,6 +620,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductResponseDto archive(Long productId) {
         ProductEntity p = requireProduct(productId);
+        assertNoPending(productId);
         p.setStatus(ProductEntity.ARCHIVED);
         p.touch();
         products.update(p);
@@ -367,6 +696,10 @@ public class ProductServiceImpl implements ProductService {
         dto.setMetaTitle(p.getMetaTitle());
         dto.setMetaDescription(p.getMetaDescription());
         dto.setMetaKeywords(p.getMetaKeywords());
+        List<ProductApprovalRequestEntity> history = approvalRequests.findByProductId(p.getId());
+        ProductApprovalSummaryDto approval = approvalSupport.summary(history);
+        dto.setApproval(approval);
+        dto.setHasPendingApproval(approval.isHasPending());
         return dto;
     }
 
@@ -381,6 +714,8 @@ public class ProductServiceImpl implements ProductService {
             }
         }
         dto.setProductMixMatch(mix);
+        approvalRequests.findByProductId(p.getId()).stream().filter(ProductApprovalRequestEntity::isPending).findFirst()
+                .ifPresent(pending -> dto.setPendingApproval(approvalSupport.pendingDetail(pending)));
         return dto;
     }
 
@@ -497,7 +832,29 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     @Override
     public ProductResponseDto publish(Long productId) {
-        ProductEntity p = requireProduct(productId);
+        requireProduct(productId);
+        assertNoPending(productId);
+        if (requireApproval) {
+            throw BusinessException.conflict(ErrorCode.APPROVAL_REQUIRED,
+                    "Hệ thống bật quy trình duyệt: hãy gửi duyệt sản phẩm thay vì publish trực tiếp", productId);
+        }
+        return doPublish(productId);
+    }
+
+    @Transactional
+    @Override
+    public ProductResponseDto publishApproved(Long productId) {
+        return doPublish(productId);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public void assertPublishable(Long productId) {
+        requireProduct(productId);
+        sellableSkus(productId);
+    }
+
+    private List<ProductSkuEntity> sellableSkus(Long productId) {
         List<ProductSkuEntity> skuList = productSkus.findByProductId(productId);
         List<ProductSkuEntity> sellable = skuList.stream()
                 .filter(s -> !ProductSkuEntity.ARCHIVED.equals(s.getStatus()))
@@ -512,6 +869,22 @@ public class ProductServiceImpl implements ProductService {
                         "Không thể publish: SKU " + s.getSkuCode() + " chưa có giá niêm yết > 0", s.getSkuCode());
             }
         }
+        return sellable;
+    }
+
+    /** Có yêu cầu duyệt đang PENDING thì sản phẩm bị khoá: sửa/đổi trạng thái phải huỷ hoặc chờ duyệt xong (409). */
+    private void assertNoPending(Long productId) {
+        for (ProductApprovalRequestEntity r : approvalRequests.findByProductId(productId)) {
+            if (r.isPending()) {
+                throw BusinessException.conflict(ErrorCode.PRODUCT_PENDING_APPROVAL,
+                        "Sản phẩm đang chờ duyệt, không thể thay đổi (hãy huỷ yêu cầu duyệt trước)", productId);
+            }
+        }
+    }
+
+    private ProductResponseDto doPublish(Long productId) {
+        ProductEntity p = requireProduct(productId);
+        List<ProductSkuEntity> sellable = sellableSkus(productId);
         for (ProductSkuEntity s : sellable) {
             if (!ProductSkuEntity.PUBLISHED.equals(s.getStatus())) {
                 s.setStatus(ProductSkuEntity.PUBLISHED);
@@ -532,14 +905,53 @@ public class ProductServiceImpl implements ProductService {
         return toAdminDto(p);
     }
 
+    /** PUBLISHED -> UNPUBLISHED; DRAFT/UNPUBLISHED giữ nguyên; ARCHIVED/DISCONTINUED phải khôi phục trước (409). */
     @Transactional
     @Override
     public ProductResponseDto unpublish(Long productId) {
         ProductEntity p = requireProduct(productId);
-        p.setStatus(ProductEntity.DRAFT);
+        assertNoPending(productId);
+        if (ProductEntity.PUBLISHED.equals(p.getStatus())) {
+            p.setStatus(ProductEntity.UNPUBLISHED);
+            p.touch();
+            products.update(p);
+        } else if (!ProductEntity.DRAFT.equals(p.getStatus()) && !ProductEntity.UNPUBLISHED.equals(p.getStatus())) {
+            throw invalidTransition(p, ProductEntity.UNPUBLISHED);
+        }
+        return toAdminDto(p);
+    }
+
+    @Transactional
+    @Override
+    public ProductResponseDto discontinue(Long productId) {
+        ProductEntity p = requireProduct(productId);
+        assertNoPending(productId);
+        if (!ProductEntity.PUBLISHED.equals(p.getStatus()) && !ProductEntity.UNPUBLISHED.equals(p.getStatus())) {
+            throw invalidTransition(p, ProductEntity.DISCONTINUED);
+        }
+        p.setStatus(ProductEntity.DISCONTINUED);
         p.touch();
         products.update(p);
         return toAdminDto(p);
+    }
+
+    @Transactional
+    @Override
+    public ProductResponseDto restore(Long productId) {
+        ProductEntity p = requireProduct(productId);
+        assertNoPending(productId);
+        if (!ProductEntity.ARCHIVED.equals(p.getStatus()) && !ProductEntity.DISCONTINUED.equals(p.getStatus())) {
+            throw invalidTransition(p, ProductEntity.UNPUBLISHED);
+        }
+        p.setStatus(ProductEntity.UNPUBLISHED);
+        p.touch();
+        products.update(p);
+        return toAdminDto(p);
+    }
+
+    private static BusinessException invalidTransition(ProductEntity p, String target) {
+        return BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
+                "Không thể chuyển sản phẩm từ " + p.getStatus() + " sang " + target, p.getStatus(), target);
     }
 
     private static String normalizeSkuStatus(String status, String fallback) {
@@ -569,6 +981,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductSkuResponseDto addVariant(Long productId, AdminSkuRequestDto req) {
         ProductEntity p = requireProduct(productId);
+        assertNoPending(productId);
         String code = req.getSkuCode().trim();
         if (productSkus.findBySkuCode(code) != null) {
             throw BusinessException.conflict(ErrorCode.DUPLICATE_SKU, "Mã SKU đã tồn tại: " + code, code);
@@ -591,6 +1004,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductSkuResponseDto updateVariant(Long productId, Long skuId, AdminSkuRequestDto req) {
         ProductEntity p = requireProduct(productId);
+        assertNoPending(productId);
         ProductSkuEntity sku = skuId == null ? null : productSkus.findOne(skuId);
         if (sku == null || !productId.equals(sku.getProductId())) {
             throw new ResourceNotFoundException("SKU", "ProductSku", skuId);
@@ -651,12 +1065,24 @@ public class ProductServiceImpl implements ProductService {
         for (ProductAttributeEntity a : attributeDefs.findAll(org.springframework.data.domain.Sort.unsorted())) {
             defs.put(a.getId(), a);
         }
+        // Ảnh của giá trị thuộc tính (attributeId|tên giá trị -> ảnh) cho picker dạng IMAGE.
+        Map<String, String> valueImages = new java.util.HashMap<>();
+        for (ProductAttributeValueEntity v : attributeValues.findAll(org.springframework.data.domain.Sort.unsorted())) {
+            if (v.getImageUrl() != null && !v.getImageUrl().isBlank()) {
+                valueImages.put(v.getAttributeId() + "|" + v.getValue(), v.getImageUrl());
+            }
+        }
         for (ProductSkuResponseDto dto : dtos) {
             List<Map<String, Object>> list = new ArrayList<>();
             for (SkuAttributeValueEntity row : rows) {
                 ProductAttributeEntity def = defs.get(row.getAttributeId());
                 if (dto.getId().equals(row.getSkuId()) && def != null) {
-                    list.add(bindingOf(def, row.getValue()));
+                    Map<String, Object> binding = bindingOf(def, row.getValue());
+                    String image = valueImages.get(def.getId() + "|" + row.getValue());
+                    if (image != null) {
+                        binding.put("imageUrl", image);
+                    }
+                    list.add(binding);
                 }
             }
             dto.setAttributeBindings(list);
@@ -671,6 +1097,7 @@ public class ProductServiceImpl implements ProductService {
         m.put("code", def.getCode());
         m.put("name", def.getName());
         m.put("type", def.getType());
+        m.put("displayType", def.getDisplayType());
         m.put("value", String.join(", ", values));
         m.put("values", values);
         return m;
@@ -695,6 +1122,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductSkuResponseDto setVariantAttributes(Long productId, Long skuId, AdminSkuAttributesRequestDto req) {
         ProductSkuEntity sku = requireSku(productId, skuId);
+        assertNoPending(productId);
         // Kiểm tra TOÀN BỘ trước khi ghi để lỗi không để lại trạng thái nửa vời.
         Map<Long, String> toStore = new LinkedHashMap<>();
         for (AdminSkuAttributesRequestDto.Item item : req.getValues()) {

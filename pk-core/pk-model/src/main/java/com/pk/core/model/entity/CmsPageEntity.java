@@ -49,6 +49,34 @@ public class CmsPageEntity extends BaseEntity {
     @Column(name = "seo")
     private String seo;
 
+    /** Thiết bị mục tiêu của bản nháp: ALL | DESKTOP | MOBILE (chép vào snapshot khi xuất bản). */
+    @Column(name = "target_device")
+    private String targetDevice = "ALL";
+
+    @Column(name = "schedule_start")
+    private java.util.Date scheduleStart;
+
+    @Column(name = "schedule_end")
+    private java.util.Date scheduleEnd;
+
+    /** Slug của bản đang public (storefront tra theo cột này, không theo slug của nháp). */
+    @Column(name = "published_slug")
+    private String publishedSlug;
+
+    /** Ảnh chụp bản đang public (JSON text: name/slug/locale/seo/targetDevice/schedule..., blocks[]). null = chưa xuất bản. */
+    @Column(name = "published_snapshot")
+    private String publishedSnapshot;
+
+    @Column(name = "published_version")
+    private int publishedVersion;
+
+    @Column(name = "published_at")
+    private java.util.Date publishedAt;
+
+    /** SHA-256 nội dung (không gồm id block) của snapshot - so với nháp để biết còn thay đổi chưa xuất bản. */
+    @Column(name = "published_hash")
+    private String publishedHash;
+
     public CmsPageEntity(String slug, String title, String status) {
         this.slug = slug;
         this.title = title;

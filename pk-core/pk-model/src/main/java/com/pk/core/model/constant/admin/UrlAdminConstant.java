@@ -40,12 +40,24 @@ public class UrlAdminConstant {
     public static class Catalog {
         public final String BASE = Common.BASE + "/catalog";
         public final String PRODUCTS = BASE + "/products";
+        public final String PRODUCT_APPROVALS = BASE + "/product-approvals";
         public final String VARIANTS = BASE + "/variants";
         public final String CATEGORIES = BASE + "/categories";
         public final String COLLECTIONS = BASE + "/collections";
         public final String ATTRIBUTES = BASE + "/attributes";
         /** POST multipart (field `file`) - upload ảnh/video dùng cho media sản phẩm, banner, CMS. */
         public final String UPLOAD = BASE + "/upload";
+    }
+
+    /** AdminImportExportRest (V24): import/export CSV sản phẩm + quản lý job. */
+    @UtilityClass
+    public static class Ie {
+        public final String BASE = Common.BASE + "/ie";
+        public final String TOPICS = BASE + "/topics";
+        public final String EXPORT_PRODUCTS = BASE + "/export/products";
+        public final String IMPORT_PRODUCTS = BASE + "/import/products";
+        public final String JOBS = BASE + "/jobs";
+        public final String JOB_STATUS = BASE + "/job/status";
     }
 
     /** AdminPromotionVoucherRest (pk-api - mục K spec). */
