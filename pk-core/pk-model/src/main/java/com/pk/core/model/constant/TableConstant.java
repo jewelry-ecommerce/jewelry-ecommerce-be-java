@@ -30,6 +30,14 @@ public final class TableConstant {
     public static final String ORDERS = "orders";
     public static final String ORDER_ITEMS = "order_items";
     public static final String ORDER_TIMELINE = "order_timeline";
+    public static final String ORDER_IDEMPOTENCY_KEYS = "order_idempotency_keys";
+
+    // Giao diện chung của site (V26)
+    public static final String SITE_HEADERS = "site_headers";
+    public static final String SITE_FOOTER = "site_footer";
+    public static final String SITE_LOGOS = "site_logos";
+    public static final String BRANDS = "brands";
+    public static final String SEASONS = "seasons";
 
     // Thanh toán (chưa có entity, để sẵn hằng)
     public static final String PAYMENTS = "payments";

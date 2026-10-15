@@ -17,6 +17,13 @@ public interface OrderService {
      * Promotion chưa làm) - cố ý để dành đợt sau. */
     OrderResponseDto create(Long userId, CreateOrderRequestDto req);
 
+    /** Như {@link #create(Long, CreateOrderRequestDto)} nhưng có `Idempotency-Key` (null/rỗng = không chống trùng).
+     * Cùng khoá + cùng nội dung -> trả lại đúng đơn đã tạo (không giữ chỗ tồn/dùng voucher thêm); cùng khoá + nội dung khác -> 409
+     * IDEMPOTENCY_KEY_REUSED; khoá sai định dạng -> 400 IDEMPOTENCY_KEY_INVALID. Khoá hiệu lực 24 giờ, tính theo từng người đặt. */
+    OrderResponseDto create(Long userId, CreateOrderRequestDto req, String idempotencyKey);
+
+    OrderResponseDto createGuest(com.pk.core.model.dto.request.GuestOrderRequestDto req, String guestCartId, String idempotencyKey);
+
     /** Đặt hàng không cần đăng nhập (địa chỉ gửi kèm). `guestCartId` (nếu có) để dọn các dòng đã mua khỏi giỏ khách. */
     OrderResponseDto createGuest(com.pk.core.model.dto.request.GuestOrderRequestDto req, String guestCartId);
 
@@ -36,6 +43,12 @@ public interface OrderService {
      * toDate (định dạng yyyy-MM-dd, có thể null/rỗng) lọc bằng Java trên placedAt sau khi query. */
     PageResponse<OrderResponseDto> searchForAdmin(String search, String status, String paymentStatus,
                                                    String fromDate, String toDate, int page, int take);
+
+    /** Danh sách đơn admin với đầy đủ bộ lọc/sắp xếp (xem {@link AdminOrderQuery}). */
+    PageResponse<OrderResponseDto> searchForAdmin(AdminOrderQuery query);
+
+    /** GET /admin/orders/counts - số đơn theo trạng thái, cùng bộ lọc với danh sách (trừ status/page/take). */
+    com.pk.core.model.dto.response.OrderCountsDto countsForAdmin(AdminOrderQuery query);
 
     /** GET /admin/orders/{orderCode} - không lọc theo userId (khác findByCodeForUser). */
     OrderResponseDto findByCodeForAdmin(String code);

@@ -470,12 +470,30 @@ public class CmsServiceImpl implements CmsService {
         }
     }
 
+    /** Alias của FE: promotionId hoặc campaignId (cấp trên cùng hoặc trong config.dataSource); promotionId được ưu tiên. */
+    private static String campaignReference(Map<String, Object> config) {
+        String raw = text(carouselValue(config, "promotionId"));
+        return raw != null ? raw : text(carouselValue(config, "campaignId"));
+    }
+
+    /** Cả 2 alias nếu có đều phải là id số; id phải trỏ tới 1 chương trình khuyến mãi tồn tại (bỏ trống = mọi khuyến mãi đang chạy). */
+    private void validateCampaignReference(Map<String, Object> config) {
+        for (String key : List.of("promotionId", "campaignId")) {
+            if (!isBlankOrNumber(carouselValue(config, key))) {
+                throw BusinessException.badRequest(ErrorCode.CAROUSEL_SOURCE_INVALID,
+                        "dataSource." + key + " phải là id số của chương trình khuyến mãi", key);
+            }
+        }
+        String raw = campaignReference(config);
+        if (raw != null && promotions.findOne(Long.valueOf(raw)) == null) {
+            throw BusinessException.badRequest(ErrorCode.CAROUSEL_SOURCE_INVALID,
+                    "Chương trình khuyến mãi không tồn tại: " + raw, raw);
+        }
+    }
+
     /** CAMPAIGN: dataSource.promotionId (hoặc campaignId) chọn 1 chương trình đang hiệu lực; bỏ trống = mọi khuyến mãi đang chạy. */
     private List<Long> campaignProductIds(Map<String, Object> config) {
-        String raw = text(carouselValue(config, "promotionId"));
-        if (raw == null) {
-            raw = text(carouselValue(config, "campaignId"));
-        }
+        String raw = campaignReference(config);
         Date now = new Date();
         if (raw == null) {
             List<Long> ids = promotions.findActiveProductIds(now);
@@ -527,7 +545,7 @@ public class CmsServiceImpl implements CmsService {
         return Math.max(1, Math.min(MAX_CAROUSEL_LIMIT, value));
     }
 
-    private static void validateCarouselConfig(Map<String, Object> config) {
+    private void validateCarouselConfig(Map<String, Object> config) {
         Object ids = carouselValue(config, "productIds");
         if (ids != null && !(ids instanceof List<?>)) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "config.dataSource.productIds phải là mảng");
@@ -546,9 +564,8 @@ public class CmsServiceImpl implements CmsService {
         } else if ("MANUAL_PRODUCTS".equals(filterType) && !hasIds) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
                     "Block PRODUCT_CAROUSEL (MANUAL_PRODUCTS) cần dataSource.productIds có ít nhất 1 sản phẩm");
-        } else if ("CAMPAIGN".equals(filterType) && !isBlankOrNumber(carouselValue(config, "promotionId"))) {
-            throw BusinessException.badRequest(ErrorCode.CAROUSEL_SOURCE_INVALID,
-                    "dataSource.promotionId phải là id số của chương trình khuyến mãi");
+        } else if ("CAMPAIGN".equals(filterType)) {
+            validateCampaignReference(config);
         } else if ("CATEGORY".equals(filterType) && carouselCategorySlugs(config).isEmpty()) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
                     "Block PRODUCT_CAROUSEL (CATEGORY) cần dataSource.categorySlugs hoặc dataSource.categoryId");
@@ -736,7 +753,7 @@ public class CmsServiceImpl implements CmsService {
         return block;
     }
 
-    private static void validateConfig(String type, Map<String, Object> config) {
+    private void validateConfig(String type, Map<String, Object> config) {
         if (config == null) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "config không được để trống");
         }

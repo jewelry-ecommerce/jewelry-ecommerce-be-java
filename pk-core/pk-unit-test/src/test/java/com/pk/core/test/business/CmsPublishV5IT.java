@@ -333,6 +333,29 @@ class CmsPublishV5IT extends IntegrationTestBase {
     }
 
     @Test
+    void campaignCarouselAcceptsCampaignIdAliasAndRejectsUnknownOrNonNumericId() throws Exception {
+        String auth = admin();
+        String t = tag();
+        ProductEntity product = newPublishedProduct(t);
+        long promotionId = createPromotion(product.getId(), "PUBLISHED", auth);
+
+        // FE gửi campaignId (tên cũ) -> cùng kết quả với promotionId; id dạng chuỗi số cũng được.
+        mvc.perform(get(carouselPage(Map.of("filterType", "CAMPAIGN", "campaignId", String.valueOf(promotionId)), auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.blocks[0].content.products[0].slug").value("sp-" + t));
+
+        // campaignId không phải số, hoặc không tồn tại -> 400 (không phải 201, không phải 500).
+        for (Object bad : List.of("abc", 999_999_999L)) {
+            String key = "campaignId";
+            mvc.perform(jsonRequest(post(pagesPath()), Map.of("name", "Trang", "slug", "trang-" + tag(),
+                            "blocks", List.of(Map.of("type", "PRODUCT_CAROUSEL", "sortOrder", 0, "config",
+                                    Map.of("dataSource", Map.of("filterType", "CAMPAIGN", key, bad))))))
+                            .header("Authorization", auth))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
     void campaignCarouselRejectsNonNumericPromotionId() throws Exception {
         String auth = admin();
         mvc.perform(jsonRequest(post(pagesPath()), Map.of("name", "Trang", "slug", "trang-" + tag(),

@@ -52,6 +52,14 @@ public class OrderResponseDto extends UpdateDto {
     private BigDecimal refundedAmount = BigDecimal.ZERO;
     private List<OrderItemResponseDto> items;
     private List<OrderTimelineResponseDto> timeline;
+    /** Id khách hàng (null = đơn khách vãng lai). */
+    private Long customerId;
+    /** Email liên hệ: email tài khoản, hoặc email khách vãng lai. */
+    private String contactEmail;
+    /** Thời điểm giao thành công (mốc DELIVERED gần nhất trong timeline), null nếu chưa giao. */
+    private Date deliveredAt;
+    /** Giá trị thu hộ COD: bằng tổng đơn nếu thanh toán COD, ngược lại 0. */
+    private BigDecimal codAmount = BigDecimal.ZERO;
 
     public static OrderResponseDto from(OrderEntity o, Long paymentId, List<OrderItemResponseDto> items,
                                          List<OrderTimelineResponseDto> timeline) {
@@ -60,7 +68,8 @@ public class OrderResponseDto extends UpdateDto {
                 o.getShipPhone(), o.getShipProvince(), o.getShipDistrict(), o.getShipWard(),
                 o.getShipAddressLine(), o.getSubtotal(), o.getProductDiscount(), o.getVoucherDiscount(),
                 o.getShippingFee(), o.getGrandTotal(), o.getAppliedVoucherCode(), o.getNote(), o.getPlacedAt(),
-                paymentId, o.getRefundedAmount() == null ? BigDecimal.ZERO : o.getRefundedAmount(), items, timeline);
+                paymentId, o.getRefundedAmount() == null ? BigDecimal.ZERO : o.getRefundedAmount(), items, timeline,
+                o.getUserId(), o.getGuestEmail(), null, BigDecimal.ZERO);
         dto.copyAudit(o);
         return dto;
     }

@@ -8,12 +8,34 @@ import java.math.BigDecimal;
  * trực tiếp theo ngày tạo/cập nhật. Ngày: yyyy-MM-dd hoặc ISO date-time. Giá lọc theo giá thấp nhất của SKU (basePrice).
  * `hasPendingApproval` (true = đang chờ duyệt, false = không) và `approvalStatus` (PENDING | APPROVED | REJECTED | CANCELLED)
  * lọc theo yêu cầu duyệt mới nhất của sản phẩm.
+ * `brandId`, `seasonId` lọc theo thương hiệu / mùa. `stockStatus` (IN_STOCK | LOW_STOCK | OUT_OF_STOCK) lọc theo tổng tồn khả dụng các SKU: 0 = hết, 1..5 = sắp hết.
  */
 public record AdminProductQuery(String status, String categorySlug, String collectionSlug, String keyword,
                                 BigDecimal minPrice, BigDecimal maxPrice, String timeFilter, String timeFrom,
                                 String timeTo, String createdFrom, String createdTo, String updatedFrom,
                                 String updatedTo, int page, int take, Boolean hasPendingApproval,
-                                String approvalStatus) {
+                                String approvalStatus, String stockStatus, Long brandId, Long seasonId) {
+
+    /** Chữ ký cũ (không lọc thương hiệu/mùa). */
+    public AdminProductQuery(String status, String categorySlug, String collectionSlug, String keyword,
+                             BigDecimal minPrice, BigDecimal maxPrice, String timeFilter, String timeFrom,
+                             String timeTo, String createdFrom, String createdTo, String updatedFrom,
+                             String updatedTo, int page, int take, Boolean hasPendingApproval,
+                             String approvalStatus, String stockStatus) {
+        this(status, categorySlug, collectionSlug, keyword, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
+                createdFrom, createdTo, updatedFrom, updatedTo, page, take, hasPendingApproval, approvalStatus,
+                stockStatus, null, null);
+    }
+
+    /** Chữ ký cũ (không lọc tồn kho). */
+    public AdminProductQuery(String status, String categorySlug, String collectionSlug, String keyword,
+                             BigDecimal minPrice, BigDecimal maxPrice, String timeFilter, String timeFrom,
+                             String timeTo, String createdFrom, String createdTo, String updatedFrom,
+                             String updatedTo, int page, int take, Boolean hasPendingApproval,
+                             String approvalStatus) {
+        this(status, categorySlug, collectionSlug, keyword, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
+                createdFrom, createdTo, updatedFrom, updatedTo, page, take, hasPendingApproval, approvalStatus, null, null, null);
+    }
 
     /** Chữ ký cũ (không lọc duyệt). */
     public AdminProductQuery(String status, String categorySlug, String collectionSlug, String keyword,
@@ -21,18 +43,18 @@ public record AdminProductQuery(String status, String categorySlug, String colle
                              String timeTo, String createdFrom, String createdTo, String updatedFrom,
                              String updatedTo, int page, int take) {
         this(status, categorySlug, collectionSlug, keyword, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
-                createdFrom, createdTo, updatedFrom, updatedTo, page, take, null, null);
+                createdFrom, createdTo, updatedFrom, updatedTo, page, take, null, null, null, null, null);
     }
 
     public AdminProductQuery withoutStatus() {
         return new AdminProductQuery(null, categorySlug, collectionSlug, keyword, minPrice, maxPrice, timeFilter,
                 timeFrom, timeTo, createdFrom, createdTo, updatedFrom, updatedTo, page, take, hasPendingApproval,
-                approvalStatus);
+                approvalStatus, stockStatus, brandId, seasonId);
     }
 
     /** Bỏ cả lọc duyệt - dùng để đếm các thẻ theo duyệt. */
     public AdminProductQuery withoutStatusAndApproval() {
         return new AdminProductQuery(null, categorySlug, collectionSlug, keyword, minPrice, maxPrice, timeFilter,
-                timeFrom, timeTo, createdFrom, createdTo, updatedFrom, updatedTo, page, take, null, null);
+                timeFrom, timeTo, createdFrom, createdTo, updatedFrom, updatedTo, page, take, null, null, stockStatus, brandId, seasonId);
     }
 }

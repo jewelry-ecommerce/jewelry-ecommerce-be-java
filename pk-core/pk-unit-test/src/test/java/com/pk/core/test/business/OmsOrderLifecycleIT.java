@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -127,12 +128,24 @@ class OmsOrderLifecycleIT extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentStatus").value("PAID"));
 
-        // Hoàn tiền vượt tổng đơn -> 400; hợp lệ -> REFUNDED.
+        // Quy tắc hoàn tiền: hoàn một phần -> paymentStatus vẫn PAID (refundedAmount cộng dồn); hoàn đủ tổng đơn -> REFUNDED.
+        // Hoàn vượt tổng đơn -> 400.
         mvc.perform(jsonRequest(post(ORDERS + "/" + code + "/refund"), Map.of("amount", 999_999_999, "reason", "thử"))
                         .header("Authorization", admin)).andExpect(status().isBadRequest());
-        mvc.perform(jsonRequest(post(ORDERS + "/" + code + "/refund"), Map.of("amount", 1_000, "reason", "thử"))
+        JsonNode partial = body(mvc.perform(jsonRequest(post(ORDERS + "/" + code + "/refund"), Map.of("amount", 1_000, "reason", "thử"))
+                        .header("Authorization", admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentStatus").value("PAID")));
+        assertEquals(1_000, partial.get("refundedAmount").asLong());
+        long remaining = partial.get("grandTotal").asLong() - 1_000;
+        mvc.perform(jsonRequest(post(ORDERS + "/" + code + "/refund"), Map.of("amount", remaining + 1, "reason", "quá"))
+                        .header("Authorization", admin)).andExpect(status().isBadRequest());
+        mvc.perform(jsonRequest(post(ORDERS + "/" + code + "/refund"), Map.of("amount", remaining, "reason", "hoàn đủ"))
                         .header("Authorization", admin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentStatus").value("REFUNDED"));
+        // Đã REFUNDED thì không hoàn thêm được nữa.
+        mvc.perform(jsonRequest(post(ORDERS + "/" + code + "/refund"), Map.of("amount", 1, "reason", "thừa"))
+                        .header("Authorization", admin)).andExpect(status().isConflict());
     }
 }

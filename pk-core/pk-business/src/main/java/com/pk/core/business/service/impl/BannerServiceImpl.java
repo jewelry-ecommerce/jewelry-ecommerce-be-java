@@ -111,7 +111,7 @@ public class BannerServiceImpl implements BannerService {
         banners.update(banner);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = com.pk.core.common.exception.ResourceNotFoundException.class)
     @Override
     public BannerPlacementRenderResponseDto renderByPlacementCode(String code, String platform) {
         BannerPlacementEntity placement = blank(code) ? null : placements.findByCode(code.trim().toUpperCase(Locale.ROOT));

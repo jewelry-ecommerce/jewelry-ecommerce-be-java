@@ -3,6 +3,7 @@ package com.pk.core.api.rest;
 import org.springframework.web.bind.annotation.RequestMapping;
 import lombok.RequiredArgsConstructor;
 
+import com.pk.core.business.service.OrderPlacementService;
 import com.pk.core.business.service.OrderService;
 import com.pk.core.business.web.AbstractRest;
 import com.pk.core.common.web.BaseRes;
@@ -33,14 +34,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderRest extends AbstractRest {
 
     private final OrderService orderService;
+    private final OrderPlacementService orderPlacement;
 
     @PostMapping(UrlConstant.Order.BASE)
     @ResponseStatus(HttpStatus.CREATED)
     public BaseRes create(@AuthenticationPrincipal SecurityUser principal,
                            @Valid @RequestBody CreateOrderRequestDto request,
+                           @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(orderService.create(principal.getId(), request));
+            return restSuccessHandle.handleSuccess(orderPlacement.place(principal.getId(), request, idempotencyKey));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -52,10 +55,11 @@ public class OrderRest extends AbstractRest {
     public BaseRes createGuest(@Valid @RequestBody GuestOrderRequestDto request,
                                @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestId,
                                @RequestHeader(value = "x-guest-id", required = false) String guestIdAlias,
+                               @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(
-                    orderService.createGuest(request, guestId != null && !guestId.isBlank() ? guestId : guestIdAlias));
+            return restSuccessHandle.handleSuccess(orderPlacement.placeGuest(request,
+                    guestId != null && !guestId.isBlank() ? guestId : guestIdAlias, idempotencyKey));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

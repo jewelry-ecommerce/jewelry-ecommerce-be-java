@@ -27,7 +27,7 @@ public class CorsConfig {
         // Patterns cho phép cả dạng https://*.vercel.app (preview deployments).
         cfg.setAllowedOriginPatterns(Arrays.stream(origins).map(String::trim).filter(s -> !s.isEmpty()).toList());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Guest-Cart-Id", "x-guest-id", "Language", "x-tenant-code"));
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key", "X-Guest-Cart-Id", "x-guest-id", "Language", "x-tenant-code"));
         cfg.setAllowCredentials(false); // dùng Bearer token, không dùng cookie
         cfg.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

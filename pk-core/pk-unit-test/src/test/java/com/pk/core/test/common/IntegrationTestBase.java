@@ -63,7 +63,7 @@ public abstract class IntegrationTestBase {
     }
 
     protected JsonNode body(ResultActions result) throws Exception {
-        JsonNode root = json.readTree(result.andReturn().getResponse().getContentAsString());
+        JsonNode root = json.readTree(result.andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
         // Response thanh cong duoc boc trong {"data": ...} (BaseRes) - loi thi khong boc nen tra nguyen root.
         return root.has("data") ? root.get("data") : root;
     }

@@ -79,13 +79,18 @@ public class AdminCatalogRest extends AbstractRest {
                                  @RequestParam(required = false) String updatedTo,
                                  @RequestParam(required = false) Boolean hasPendingApproval,
                                  @RequestParam(required = false) String approvalStatus,
+                                 @RequestParam(required = false) String stockStatus,
+                                 @RequestParam(required = false) Long brandId,
+                                 @RequestParam(required = false) Long seasonId,
+                                 @RequestParam(required = false) String seasonUuid,
                                  @RequestParam(required = false, defaultValue = "1") int page,
                                  @RequestParam(required = false, defaultValue = "20") int take,
                                  HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(productService.searchForAdmin(new AdminProductQuery(status,
                     categorySlug, collectionSlug, search, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
-                    createdFrom, createdTo, updatedFrom, updatedTo, page, take, hasPendingApproval, approvalStatus)));
+                    createdFrom, createdTo, updatedFrom, updatedTo, page, take, hasPendingApproval, approvalStatus, stockStatus, brandId,
+                    seasonOf(seasonId, seasonUuid))));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -105,11 +110,16 @@ public class AdminCatalogRest extends AbstractRest {
                                   @RequestParam(required = false) String createdTo,
                                   @RequestParam(required = false) String updatedFrom,
                                   @RequestParam(required = false) String updatedTo,
+                                  @RequestParam(required = false) String stockStatus,
+                                  @RequestParam(required = false) Long brandId,
+                                  @RequestParam(required = false) Long seasonId,
+                                  @RequestParam(required = false) String seasonUuid,
                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(productService.countsForAdmin(new AdminProductQuery(null,
                     categorySlug, collectionSlug, search, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
-                    createdFrom, createdTo, updatedFrom, updatedTo, 1, 20)));
+                    createdFrom, createdTo, updatedFrom, updatedTo, 1, 20, null, null, stockStatus, brandId,
+                    seasonOf(seasonId, seasonUuid))));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -459,6 +469,19 @@ public class AdminCatalogRest extends AbstractRest {
             return restSuccessHandle.handleSuccess(attributeService.update(attributeId, request));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    /** FE gọi mùa là `seasonUuid` (chuỗi); BE dùng id số nên chấp nhận cả `seasonId` và `seasonUuid` dạng số. */
+    private static Long seasonOf(Long seasonId, String seasonUuid) {
+        if (seasonId != null || seasonUuid == null || seasonUuid.isBlank()) {
+            return seasonId;
+        }
+        try {
+            return Long.parseLong(seasonUuid.trim());
+        } catch (NumberFormatException ex) {
+            throw com.pk.core.common.exception.BusinessException.badRequest("VALIDATION_FAILED",
+                    "seasonUuid phải là id số của mùa: " + seasonUuid, seasonUuid);
         }
     }
 }

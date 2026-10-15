@@ -45,6 +45,8 @@ public class UrlAdminConstant {
         public final String CATEGORIES = BASE + "/categories";
         public final String COLLECTIONS = BASE + "/collections";
         public final String ATTRIBUTES = BASE + "/attributes";
+        public final String BRANDS = BASE + "/brands";
+        public final String SEASONS = BASE + "/seasons";
         /** POST multipart (field `file`) - upload ảnh/video dùng cho media sản phẩm, banner, CMS. */
         public final String UPLOAD = BASE + "/upload";
     }
@@ -94,6 +96,9 @@ public class UrlAdminConstant {
     public static class Cms {
         public final String BASE = Common.BASE + "/cms";
         public final String PAGES = BASE + "/pages";
+        public final String HEADERS = BASE + "/headers";
+        public final String FOOTER = BASE + "/footer";
+        public final String LOGOS = BASE + "/logos";
     }
 
     /** AdminBadgeRest (pk-api, gói api.rest.admin - mục P spec). GET/POST/PUT/PATCH/DELETE cụ thể
@@ -102,6 +107,17 @@ public class UrlAdminConstant {
     public static class Badge {
         public final String TEMPLATES = Common.BASE + "/badge-templates";
         public final String FLOW = Common.BASE + "/badge-flow";
+    }
+
+    /** AdminDashboardRest (pk-api) - tổng hợp số liệu thật từ DB cho trang dashboard admin. */
+    @UtilityClass
+    public static class Dashboard {
+        public final String BASE = Common.BASE + "/dashboard";
+        public final String OVERVIEW = BASE + "/overview";
+        public final String REVENUE = BASE + "/revenue";
+        public final String RECENT_ORDERS = BASE + "/recent-orders";
+        public final String LOW_STOCK = BASE + "/low-stock";
+        public final String TOP_PRODUCTS = BASE + "/top-products";
     }
 
     /** AdminInventoryRest (pk-api, gói api.rest.admin - mục M spec). `warehouseId` quyết định thiết

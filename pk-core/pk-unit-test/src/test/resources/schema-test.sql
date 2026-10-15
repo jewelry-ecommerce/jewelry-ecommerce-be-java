@@ -27,6 +27,12 @@ CREATE SEQUENCE product_infos_id_seq START WITH 1;
 CREATE SEQUENCE product_approval_requests_id_seq START WITH 1;
 CREATE SEQUENCE import_export_jobs_id_seq START WITH 1;
 CREATE SEQUENCE import_job_rows_id_seq START WITH 1;
+CREATE SEQUENCE order_idempotency_keys_id_seq START WITH 1;
+CREATE SEQUENCE site_headers_id_seq START WITH 1;
+CREATE SEQUENCE site_footer_id_seq START WITH 1;
+CREATE SEQUENCE site_logos_id_seq START WITH 1;
+CREATE SEQUENCE brands_id_seq START WITH 1;
+CREATE SEQUENCE seasons_id_seq START WITH 1;
 CREATE SEQUENCE category_attributes_id_seq START WITH 1;
 CREATE SEQUENCE product_attribute_values_id_seq START WITH 1;
 CREATE SEQUENCE product_mix_matches_id_seq START WITH 1;
@@ -142,7 +148,41 @@ CREATE TABLE collections (
     CONSTRAINT ck_collections_status CHECK (status IN ('DRAFT', 'PUBLISHED'))
 );
 
+CREATE TABLE brands (
+    id           BIGINT PRIMARY KEY,
+    code         VARCHAR(40)  NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    image_url    VARCHAR(500),
+    website_url  VARCHAR(500),
+    status       VARCHAR(10)  NOT NULL,
+    created_id   BIGINT,
+    created_date TIMESTAMP    NOT NULL,
+    updated_id   BIGINT,
+    updated_date TIMESTAMP,
+    deleted_id   BIGINT,
+    deleted_date TIMESTAMP
+);
+
+CREATE TABLE seasons (
+    id           BIGINT PRIMARY KEY,
+    code         VARCHAR(40)  NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    description  VARCHAR(500),
+    start_month  SMALLINT     NOT NULL,
+    end_month    SMALLINT     NOT NULL,
+    sort_order   INT          NOT NULL,
+    is_active    BOOLEAN      NOT NULL,
+    created_id   BIGINT,
+    created_date TIMESTAMP    NOT NULL,
+    updated_id   BIGINT,
+    updated_date TIMESTAMP,
+    deleted_id   BIGINT,
+    deleted_date TIMESTAMP
+);
+
 CREATE TABLE products (
+    brand_id          BIGINT REFERENCES brands (id),
+    season_id         BIGINT REFERENCES seasons (id),
     id                BIGINT PRIMARY KEY,
     category_id       BIGINT NOT NULL REFERENCES categories (id),
     code              VARCHAR(60) NOT NULL,
@@ -766,4 +806,68 @@ CREATE TABLE import_job_rows (
     data          TEXT,
     created_id    BIGINT,
     created_date  TIMESTAMP NOT NULL
+);
+
+CREATE TABLE order_idempotency_keys (
+    id           BIGINT PRIMARY KEY,
+    owner        VARCHAR(64)  NOT NULL,
+    idem_key     VARCHAR(100) NOT NULL,
+    request_hash VARCHAR(64)  NOT NULL,
+    order_code   VARCHAR(40)  NOT NULL,
+    created_id   BIGINT,
+    created_date TIMESTAMP    NOT NULL,
+    CONSTRAINT uq_order_idem UNIQUE (owner, idem_key)
+);
+
+CREATE TABLE site_headers (
+    id                 BIGINT PRIMARY KEY,
+    banner_name        VARCHAR(150) NOT NULL,
+    display_style      VARCHAR(10)  NOT NULL,
+    content            VARCHAR(1000),
+    bg_color           VARCHAR(30),
+    text_color         VARCHAR(30),
+    target_url         VARCHAR(500),
+    animation_style    VARCHAR(30),
+    loop_interval_sec  INTEGER,
+    start_time         TIMESTAMP    NOT NULL,
+    end_time           TIMESTAMP,
+    status             VARCHAR(12)  NOT NULL,
+    created_id         BIGINT,
+    created_date       TIMESTAMP    NOT NULL,
+    updated_id         BIGINT,
+    updated_date       TIMESTAMP,
+    deleted_id         BIGINT,
+    deleted_date       TIMESTAMP
+);
+
+CREATE TABLE site_footer (
+    id                       BIGINT PRIMARY KEY,
+    copyright_text           VARCHAR(500),
+    footer_logo_url          VARCHAR(500),
+    certification_image_url  VARCHAR(500),
+    certification_url        VARCHAR(500),
+    social_links             TEXT,
+    menu_columns             TEXT,
+    created_id               BIGINT,
+    created_date             TIMESTAMP NOT NULL,
+    updated_id               BIGINT,
+    updated_date             TIMESTAMP,
+    deleted_id               BIGINT,
+    deleted_date             TIMESTAMP
+);
+
+CREATE TABLE site_logos (
+    id               BIGINT PRIMARY KEY,
+    name             VARCHAR(150) NOT NULL,
+    type             VARCHAR(10)  NOT NULL,
+    status           VARCHAR(12)  NOT NULL,
+    logo_url         VARCHAR(500) NOT NULL,
+    logo_theme       VARCHAR(30),
+    logo_target_url  VARCHAR(500),
+    created_id       BIGINT,
+    created_date     TIMESTAMP    NOT NULL,
+    updated_id       BIGINT,
+    updated_date     TIMESTAMP,
+    deleted_id       BIGINT,
+    deleted_date     TIMESTAMP
 );

@@ -64,7 +64,7 @@ public class SecurityConfig {
                         // CMS storefront (trang đã PUBLISHED theo slug) và render banner theo vị trí: công khai, chỉ GET.
                         // Khách gửi yêu cầu (báo khi có hàng / hỗ trợ đơn / nhận tin): công khai, chỉ POST.
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.CustomerRequest.BASE + "/**")).permitAll()
-                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Cms.PAGES + "/**")).permitAll()
+                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Cms.PAGES + "/**"), v1(UrlConstant.Cms.SITE_LAYOUT)).permitAll()
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Banner.PLACEMENTS_BY_CODE + "/**")).permitAll()
                         // Khách vãng lai: đặt hàng, báo giá, tra cứu đơn (mã đơn + SĐT) không cần đăng nhập.
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Order.GUEST), v1(UrlConstant.Checkout.QUOTE_GUEST)).permitAll()
@@ -100,6 +100,7 @@ public class SecurityConfig {
                                 v1(UrlAdminConstant.Common.BASE + "/badge-flow/**"))
                         .hasAnyRole("ADMIN", "CATALOG_MANAGER")
                         .requestMatchers(v1(UrlAdminConstant.Common.BASE + "/orders/**"),
+                                v1(UrlAdminConstant.Common.BASE + "/dashboard/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/inventory/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/customers/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/customer-request/**"))

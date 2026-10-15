@@ -57,6 +57,8 @@ public final class ErrorCode {
     public static final String SKU_EXISTS = "SKU_EXISTS";
     public static final String STOCK_ADJUSTMENT_INVALID = "STOCK_ADJUSTMENT_INVALID";
     public static final String STOCK_CONFLICT = "STOCK_CONFLICT";
+    public static final String IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED";
+    public static final String IDEMPOTENCY_KEY_INVALID = "IDEMPOTENCY_KEY_INVALID";
     public static final String UNAUTHORIZED = "UNAUTHORIZED";
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
     public static final String VOUCHER_EXPIRED = "VOUCHER_EXPIRED";

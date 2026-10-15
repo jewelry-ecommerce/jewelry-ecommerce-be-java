@@ -85,7 +85,7 @@ public class VoucherServiceImpl implements VoucherService {
     @Transactional
     @Override
     public VoucherResponseDto create(AdminVoucherRequestDto req) {
-        String code = req.getCode().trim().toUpperCase(Locale.ROOT);
+        String code = DiscountRules.voucherCode(req.getCode());
         if (vouchers.findByCode(code) != null) {
             throw BusinessException.conflict(ErrorCode.DUPLICATE_CODE, "Mã voucher đã tồn tại: " + code, code);
         }
@@ -100,7 +100,7 @@ public class VoucherServiceImpl implements VoucherService {
     @Override
     public VoucherResponseDto update(Long voucherId, AdminVoucherRequestDto req) {
         VoucherEntity v = requireVoucher(voucherId);
-        String code = req.getCode().trim().toUpperCase(Locale.ROOT);
+        String code = DiscountRules.voucherCode(req.getCode());
         if (!code.equals(v.getCode()) && vouchers.findByCode(code) != null) {
             throw BusinessException.conflict(ErrorCode.DUPLICATE_CODE, "Mã voucher đã tồn tại: " + code, code);
         }
@@ -118,15 +118,29 @@ public class VoucherServiceImpl implements VoucherService {
     }
 
     private void applyRequest(VoucherEntity v, AdminVoucherRequestDto req) {
-        v.setDiscountType(req.getDiscountType().trim().toUpperCase(Locale.ROOT));
+        String rawType = req.getDiscountType() == null ? "" : req.getDiscountType().trim().toUpperCase(Locale.ROOT);
+        if ("FLAT_PRICE".equals(rawType)) {
+            throw DiscountRules.invalid("Voucher không hỗ trợ giảm đồng giá (FLAT_PRICE); dùng PERCENT hoặc FIXED", "discountType");
+        }
+        String type = DiscountRules.type(rawType, java.util.Set.of("PERCENT", "FIXED"), "voucher");
+        DiscountRules.value(type, req.getDiscountValue(), req.getMaxDiscountAmount());
+        DiscountRules.period(req.getStartsAt(), req.getEndsAt());
+        String status = DiscountRules.status(req.getStatus());
+        if (req.getUsageLimit() != null && req.getUsageLimit() < 1) {
+            throw DiscountRules.invalid("Giới hạn lượt dùng phải từ 1 trở lên (bỏ trống nếu không giới hạn)", "usageLimit");
+        }
+        if (req.getUsageLimit() != null && req.getUsageLimit() < v.getUsedCount()) {
+            throw DiscountRules.invalid("Giới hạn lượt dùng không được nhỏ hơn số lượt đã dùng (" + v.getUsedCount() + ")", "usageLimit");
+        }
+        v.setDiscountType(type);
         v.setDiscountValue(req.getDiscountValue());
-        v.setMaxDiscountAmount(req.getMaxDiscountAmount());
+        v.setMaxDiscountAmount("PERCENT".equals(type) ? req.getMaxDiscountAmount() : null);
         v.setMinOrderValue(req.getMinOrderValue() != null ? req.getMinOrderValue() : BigDecimal.ZERO);
         v.setUsageLimit(req.getUsageLimit());
         v.setStartsAt(req.getStartsAt());
         v.setEndsAt(req.getEndsAt());
-        if (req.getStatus() != null && !req.getStatus().isBlank()) {
-            v.setStatus(req.getStatus().trim().toUpperCase(Locale.ROOT));
+        if (status != null) {
+            v.setStatus(status);
         }
     }
 

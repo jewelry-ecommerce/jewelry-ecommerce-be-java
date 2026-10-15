@@ -188,6 +188,11 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     public CategoryResponseDto create(AdminCategoryRequestDto req) {
         String slug = resolveSlug(req.getSlug(), req.getName());
+        // Mã do người dùng nhập mà trùng -> báo DUPLICATE_CODE trước (slug có thể trùng theo vì FE sinh slug từ mã).
+        if (!blank(req.getCode()) && categories.findByCode(req.getCode().trim()) != null) {
+            throw BusinessException.conflict(ErrorCode.DUPLICATE_CODE, "Mã danh mục đã tồn tại: " + req.getCode().trim(),
+                    req.getCode().trim());
+        }
         if (categories.findBySlug(slug) != null) {
             throw BusinessException.conflict(ErrorCode.DUPLICATE_SLUG, "Đường dẫn (slug) đã tồn tại: " + slug, slug);
         }
@@ -218,6 +223,13 @@ public class CategoryServiceImpl implements CategoryService {
             throw new ResourceNotFoundException("Danh mục", "Category", categoryId);
         }
         String slug = resolveSlug(req.getSlug(), req.getName());
+        if (!blank(req.getCode())) {
+            CategoryEntity sameCode = categories.findByCode(req.getCode().trim());
+            if (sameCode != null && !sameCode.getId().equals(categoryId)) {
+                throw BusinessException.conflict(ErrorCode.DUPLICATE_CODE, "Mã danh mục đã tồn tại: " + req.getCode().trim(),
+                        req.getCode().trim());
+            }
+        }
         if (!slug.equals(c.getSlug()) && categories.findBySlug(slug) != null) {
             throw BusinessException.conflict(ErrorCode.DUPLICATE_SLUG, "Đường dẫn (slug) đã tồn tại: " + slug, slug);
         }

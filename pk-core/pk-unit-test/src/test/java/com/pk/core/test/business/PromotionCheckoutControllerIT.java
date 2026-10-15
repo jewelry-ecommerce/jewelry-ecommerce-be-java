@@ -101,7 +101,7 @@ class PromotionCheckoutControllerIT extends IntegrationTestBase {
         long addressId = json.readTree(mvc.perform(post(UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlConstant.Me.ADDRESSES)
                         .header("Authorization", bearer(token))
                         .contentType("application/json").content(addressBody))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString())
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
                 .path("data").path("id").asLong();
 
         Map<String, Object> req = Map.of("addressId", addressId, "shippingMethod", "STANDARD",

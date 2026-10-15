@@ -39,7 +39,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     @Override
     public PageResponse<AdminCustomerResponseDto> search(String keyword, int page, int take) {
-        List<AdminCustomerResponseDto> all = users.searchCustomers(keyword).stream()
+        List<AdminCustomerResponseDto> all = users.searchCustomers(keyword == null ? "" : keyword.trim()).stream()
                 .map(u -> AdminCustomerResponseDto.from(u, orders.findByUserId(u.getId()).size()))
                 .toList();
         return PageResponse.paginate(all, page, take);

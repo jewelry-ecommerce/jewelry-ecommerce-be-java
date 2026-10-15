@@ -1,10 +1,17 @@
 package com.pk.core.business.service.impl;
 
+import java.util.Set;
+import com.pk.core.model.entity.UserEntity;
+import com.pk.core.model.dto.response.OrderCountsDto;
+import com.pk.core.business.service.AdminOrderQuery;
+import com.pk.core.business.repository.UserRepo;
 import lombok.RequiredArgsConstructor;
 
 import com.pk.core.business.repository.CartItemRepo;
 import com.pk.core.business.repository.CartRepo;
 import com.pk.core.business.repository.CustomerAddressRepo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pk.core.business.repository.OrderIdempotencyKeyRepo;
 import com.pk.core.business.repository.OrderItemRepo;
 import com.pk.core.business.repository.OrderRepo;
 import com.pk.core.business.repository.OrderTimelineRepo;
@@ -30,6 +37,7 @@ import com.pk.core.model.dto.response.OrderTimelineResponseDto;
 import com.pk.core.model.entity.CartEntity;
 import com.pk.core.model.entity.CustomerAddressEntity;
 import com.pk.core.model.entity.OrderEntity;
+import com.pk.core.model.entity.OrderIdempotencyKeyEntity;
 import com.pk.core.model.entity.OrderItemEntity;
 import com.pk.core.model.entity.OrderTimelineEntity;
 import com.pk.core.model.entity.PaymentEntity;
@@ -54,6 +62,7 @@ import java.util.Map;
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepo orders;
+    private final UserRepo users;
     private final OrderItemRepo orderItems;
     private final OrderTimelineRepo orderTimelines;
     private final PaymentRepo payments;
@@ -65,10 +74,26 @@ public class OrderServiceImpl implements OrderService {
     private final PreOrderService preOrder;
     private final CartRepo carts;
     private final CartItemRepo cartItems;
+    private final OrderIdempotencyKeyRepo idempotencyKeys;
+    private final ObjectMapper objectMapper;
+
+    /** Thời gian hiệu lực của Idempotency-Key. */
+    static final long IDEMPOTENCY_TTL_MILLIS = 24L * 60 * 60 * 1000;
+    private static final java.util.regex.Pattern IDEMPOTENCY_KEY_PATTERN = java.util.regex.Pattern.compile("[A-Za-z0-9._:-]{8,100}");
 
     @Transactional
     @Override
     public OrderResponseDto create(Long userId, CreateOrderRequestDto req) {
+        return create(userId, req, null);
+    }
+
+    @Transactional
+    @Override
+    public OrderResponseDto create(Long userId, CreateOrderRequestDto req, String idempotencyKey) {
+        return idempotent("U:" + userId, idempotencyKey, req, () -> createNew(userId, req));
+    }
+
+    private OrderResponseDto createNew(Long userId, CreateOrderRequestDto req) {
         CustomerAddressEntity address = addresses.findByIdAndUserId(req.getAddressId(), userId);
         if (address == null) {
             throw new ResourceNotFoundException("Địa chỉ giao hàng", "Address", req.getAddressId());
@@ -80,6 +105,65 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     @Override
     public OrderResponseDto createGuest(GuestOrderRequestDto req, String guestCartId) {
+        return createGuest(req, guestCartId, null);
+    }
+
+    @Transactional
+    @Override
+    public OrderResponseDto createGuest(GuestOrderRequestDto req, String guestCartId, String idempotencyKey) {
+        return idempotent("G:" + digits(req.getPhone()), idempotencyKey, req, () -> createGuestNew(req, guestCartId));
+    }
+
+    /** Bọc đặt đơn bằng Idempotency-Key. Khoá được ghi CÙNG transaction với đơn: nếu hai request cùng khoá chạy đồng thời thì
+     * request chậm hơn vi phạm UNIQUE (owner, idem_key) -> rollback toàn bộ (tồn/voucher không bị trừ hai lần) và
+     * OrderPlacementService thử lại để nhận đơn của request kia. */
+    private OrderResponseDto idempotent(String owner, String key, Object payload, java.util.function.Supplier<OrderResponseDto> action) {
+        if (key == null || key.isBlank()) {
+            return action.get();
+        }
+        String k = key.trim();
+        if (!IDEMPOTENCY_KEY_PATTERN.matcher(k).matches()) {
+            throw BusinessException.badRequest(ErrorCode.IDEMPOTENCY_KEY_INVALID,
+                    "Idempotency-Key phải dài 8-100 ký tự (chữ, số, - _ . :)");
+        }
+        String hash = sha256(payload);
+        OrderIdempotencyKeyEntity existing = idempotencyKeys.findByOwnerAndKey(owner, k);
+        if (existing != null) {
+            boolean expired = existing.getCreatedDate() != null
+                    && System.currentTimeMillis() - existing.getCreatedDate().getTime() > IDEMPOTENCY_TTL_MILLIS;
+            if (!expired) {
+                if (!existing.getRequestHash().equals(hash)) {
+                    throw BusinessException.conflict(ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                            "Idempotency-Key này đã được dùng cho một đơn hàng với nội dung khác");
+                }
+                OrderEntity previous = orders.findByCode(existing.getOrderCode());
+                if (previous != null) {
+                    return toDto(previous);
+                }
+            }
+            idempotencyKeys.delete(existing); // hết hạn (hoặc đơn không còn) -> cho phép dùng lại khoá
+        }
+        OrderResponseDto created = action.get();
+        OrderIdempotencyKeyEntity row = new OrderIdempotencyKeyEntity();
+        row.setOwner(owner);
+        row.setIdemKey(k);
+        row.setRequestHash(hash);
+        row.setOrderCode(created.getCode());
+        idempotencyKeys.create(row);
+        return created;
+    }
+
+    private String sha256(Object payload) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(objectMapper.writeValueAsString(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (Exception e) {
+            throw new IllegalStateException("Không băm được nội dung đặt đơn", e);
+        }
+    }
+
+    private OrderResponseDto createGuestNew(GuestOrderRequestDto req, String guestCartId) {
         CustomerAddressEntity shipTo = new CustomerAddressEntity();
         shipTo.setRecipientName(req.getRecipientName().trim());
         shipTo.setPhone(req.getPhone().trim());
@@ -259,7 +343,18 @@ public class OrderServiceImpl implements OrderService {
         List<OrderTimelineResponseDto> timeline = orderTimelines.findByOrderId(o.getId()).stream()
                 .map(OrderTimelineResponseDto::from).toList();
         PaymentEntity payment = payments.findByOrderId(o.getId());
-        return OrderResponseDto.from(o, payment != null ? payment.getId() : null, items, timeline);
+        OrderResponseDto dto = OrderResponseDto.from(o, payment != null ? payment.getId() : null, items, timeline);
+        dto.setDeliveredAt(deliveredAtOf(orderTimelines.findByOrderId(o.getId())));
+        if (o.getUserId() != null) {
+            UserEntity user = users.findOne(o.getUserId());
+            if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+                dto.setContactEmail(user.getEmail());
+            }
+        }
+        if ("COD".equalsIgnoreCase(o.getPaymentMethod()) && o.getGrandTotal() != null) {
+            dto.setCodAmount(o.getGrandTotal());
+        }
+        return dto;
     }
 
     // ============================== Admin (mục L spec) ==============================
@@ -268,14 +363,147 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public PageResponse<OrderResponseDto> searchForAdmin(String search, String status, String paymentStatus,
                                                            String fromDate, String toDate, int page, int take) {
-        Date from = parseAdminDate(fromDate, false);
-        Date to = parseAdminDate(toDate, true);
-        List<OrderResponseDto> all = orders.searchAdmin(status, paymentStatus, search).stream()
-                .filter(o -> from == null || !o.getPlacedAt().before(from))
-                .filter(o -> to == null || !o.getPlacedAt().after(to))
-                .map(this::toDto)
-                .toList();
-        return PageResponse.paginate(all, page, take);
+        return searchForAdmin(new AdminOrderQuery(search, status, paymentStatus, fromDate, toDate, null, null, null,
+                null, null, null, null, page, take));
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public PageResponse<OrderResponseDto> searchForAdmin(AdminOrderQuery q) {
+        List<OrderResponseDto> all = adminMatch(q).stream().map(this::toDto).toList();
+        return PageResponse.paginate(all, q.page(), q.take());
+    }
+
+    private static final List<String> ORDER_STATUSES = List.of(OrderEntity.PENDING, OrderEntity.CONFIRMED,
+            OrderEntity.SHIPPING, OrderEntity.DELIVERED, OrderEntity.CANCELLED, OrderEntity.RETURNED);
+
+    @Transactional(readOnly = true)
+    @Override
+    public OrderCountsDto countsForAdmin(AdminOrderQuery q) {
+        Map<String, Long> by = new LinkedHashMap<>();
+        ORDER_STATUSES.forEach(st -> by.put(st, 0L));
+        List<OrderEntity> matched = adminMatch(q.withoutStatus());
+        for (OrderEntity o : matched) {
+            by.merge(o.getStatus(), 1L, Long::sum);
+        }
+        return new OrderCountsDto(matched.size(), by);
+    }
+
+    /** Tra đơn cho admin: ưu tiên mã đơn, nếu không có và tham số toàn chữ số thì tra theo id số. */
+    private OrderEntity adminOrder(String codeOrId) {
+        String key = trimOrEmpty(codeOrId);
+        OrderEntity order = key.isEmpty() ? null : orders.findByCode(key);
+        if (order == null && key.matches("\\d{1,18}")) {
+            order = orders.findOne(Long.parseLong(key));
+        }
+        if (order == null) {
+            throw new ResourceNotFoundException("Đơn hàng", "Order", codeOrId);
+        }
+        return order;
+    }
+
+    private static String normToken(String v) {
+        return v == null ? "" : v.replaceAll("[^A-Za-z0-9]", "").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static Date deliveredAtOf(List<OrderTimelineEntity> timeline) {
+        Date latest = null;
+        for (OrderTimelineEntity t : timeline) {
+            if (OrderEntity.DELIVERED.equals(t.getStatus()) && t.getOccurredAt() != null
+                    && (latest == null || t.getOccurredAt().after(latest))) {
+                latest = t.getOccurredAt();
+            }
+        }
+        return latest;
+    }
+
+    /** Lọc bằng SQL (status/paymentStatus/từ khoá) rồi lọc tiếp + sắp xếp bằng Java. */
+    private List<OrderEntity> adminMatch(AdminOrderQuery q) {
+        String dateField = normToken(q.dateField());
+        if (!dateField.isEmpty() && !dateField.equals("createdat") && !dateField.equals("deliveredat")) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "dateField không hợp lệ: " + q.dateField() + " (createdAt | deliveredAt)", q.dateField());
+        }
+        boolean byDelivered = dateField.equals("deliveredat");
+        String sortKey = normToken(q.orderBy());
+        if (!Set.of("", "createdat", "updatedat", "ordercode", "grandtotal").contains(sortKey)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "orderBy không hợp lệ: " + q.orderBy() + " (createdAt | updatedAt | orderCode | grandTotal)", q.orderBy());
+        }
+        String dir = trimOrEmpty(q.orderType()).toUpperCase(java.util.Locale.ROOT);
+        if (!Set.of("", "ASC", "DESC").contains(dir)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "orderType không hợp lệ: " + q.orderType() + " (ASC | DESC)", q.orderType());
+        }
+        String source = normToken(q.source());
+        if (!source.isEmpty() && !source.equals("website") && !source.equals("online")) {
+            return List.of(); // mọi đơn hiện đều đặt từ website
+        }
+        Date from = parseAdminDate(q.fromDate(), false);
+        Date to = parseAdminDate(q.toDate(), true);
+        String ship = normToken(q.shippingMethod());
+        String province = trimOrEmpty(q.provinceName()).toLowerCase(java.util.Locale.ROOT);
+        String skuKw = trimOrEmpty(q.skuCode()).toLowerCase(java.util.Locale.ROOT);
+        Set<Long> skuIds = null;
+        if (!skuKw.isEmpty()) {
+            skuIds = new java.util.HashSet<>();
+            for (ProductSkuEntity sku : productSkus.searchByKeyword(skuKw)) {
+                if (sku.getSkuCode() != null && sku.getSkuCode().toLowerCase(java.util.Locale.ROOT).contains(skuKw)) {
+                    skuIds.add(sku.getId());
+                }
+            }
+            if (skuIds.isEmpty()) {
+                return List.of();
+            }
+        }
+        List<OrderEntity> out = new ArrayList<>();
+        for (OrderEntity o : orders.searchAdmin(upperOrEmpty(q.status()), upperOrEmpty(q.paymentStatus()),
+                trimOrEmpty(q.search()))) {
+            if (!ship.isEmpty() && !ship.equals(normToken(o.getShippingMethod()))) {
+                continue;
+            }
+            if (!province.isEmpty() && (o.getShipProvince() == null
+                    || !o.getShipProvince().toLowerCase(java.util.Locale.ROOT).contains(province))) {
+                continue;
+            }
+            if (from != null || to != null) {
+                Date at = byDelivered ? deliveredAtOf(orderTimelines.findByOrderId(o.getId())) : o.getPlacedAt();
+                if (at == null || (from != null && at.before(from)) || (to != null && at.after(to))) {
+                    continue;
+                }
+            }
+            if (skuIds != null) {
+                final Set<Long> wanted = skuIds;
+                if (orderItems.findByOrderId(o.getId()).stream().noneMatch(i -> wanted.contains(i.getSkuId()))) {
+                    continue;
+                }
+            }
+            out.add(o);
+        }
+        if (!sortKey.isEmpty() || !dir.isEmpty()) {
+            java.util.Comparator<OrderEntity> cmp = switch (sortKey) {
+                case "updatedat" -> java.util.Comparator.comparing(
+                        (OrderEntity o) -> o.getUpdatedDate() != null ? o.getUpdatedDate() : o.getPlacedAt(),
+                        java.util.Comparator.nullsFirst(java.util.Comparator.<Date>naturalOrder()));
+                case "ordercode" -> java.util.Comparator.comparing(OrderEntity::getCode,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.<String>naturalOrder()));
+                case "grandtotal" -> java.util.Comparator.comparing(OrderEntity::getGrandTotal,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.<java.math.BigDecimal>naturalOrder()));
+                default -> java.util.Comparator.comparing(OrderEntity::getPlacedAt,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.<Date>naturalOrder()));
+            };
+            out.sort("ASC".equals(dir) ? cmp : cmp.reversed());
+        }
+        return out;
+    }
+
+    /** Bộ lọc tuỳ chọn: bỏ qua query / null / rỗng đều nghĩa là KHÔNG lọc (SQL chỉ hiểu chuỗi rỗng, NULL sẽ loại hết dòng). */
+    private static String trimOrEmpty(String v) {
+        return v == null ? "" : v.trim();
+    }
+
+    private static String upperOrEmpty(String v) {
+        return trimOrEmpty(v).toUpperCase(java.util.Locale.ROOT);
     }
 
     /** Parse "yyyy-MM-dd" thành mốc đầu ngày (endOfDay=false, dùng cho fromDate) hoặc cuối ngày
@@ -298,20 +526,14 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     @Override
     public OrderResponseDto findByCodeForAdmin(String code) {
-        OrderEntity order = orders.findByCode(code);
-        if (order == null) {
-            throw new ResourceNotFoundException("Đơn hàng", "Order", code);
-        }
+        OrderEntity order = adminOrder(code);
         return toDto(order);
     }
 
     @Transactional
     @Override
     public OrderResponseDto updateStatus(String code, AdminOrderStatusRequestDto request) {
-        OrderEntity order = orders.findByCode(code);
-        if (order == null) {
-            throw new ResourceNotFoundException("Đơn hàng", "Order", code);
-        }
+        OrderEntity order = adminOrder(code);
         String oldStatus = order.getStatus();
         String newStatus = request.getStatus();
         // args khớp placeholder {0}/{1} của messages_vi/en (INVALID_STATUS_TRANSITION).
@@ -362,10 +584,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     @Override
     public OrderResponseDto cancelByAdmin(String code, String reason) {
-        OrderEntity order = orders.findByCode(code);
-        if (order == null) {
-            throw new ResourceNotFoundException("Đơn hàng", "Order", code);
-        }
+        OrderEntity order = adminOrder(code);
         // Cùng quy ước cancel() của khách (xem javadoc phía trên) - chỉ khác isCancellableByAdmin().
         if (OrderEntity.CANCELLED.equals(order.getStatus())) {
             throw BusinessException.badRequest(ErrorCode.ORDER_ALREADY_CANCELLED,
@@ -392,10 +611,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     @Override
     public OrderResponseDto returnOrder(String code, AdminOrderReturnRequestDto request) {
-        OrderEntity order = orders.findByCode(code);
-        if (order == null) {
-            throw new ResourceNotFoundException("Đơn hàng", "Order", code);
-        }
+        OrderEntity order = adminOrder(code);
         if (!order.isReturnable()) {
             throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
                     "Chỉ xác nhận hoàn trả được khi đơn đang DELIVERED (hiện tại: " + order.getStatus() + ")",
@@ -471,10 +687,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     @Override
     public OrderResponseDto refund(String code, BigDecimal amount, String reason) {
-        OrderEntity order = orders.findByCode(code);
-        if (order == null) {
-            throw new ResourceNotFoundException("Đơn hàng", "Order", code);
-        }
+        OrderEntity order = adminOrder(code);
         if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 0) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
                     "Số tiền hoàn phải là số nguyên dương (VND)");

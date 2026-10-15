@@ -4,6 +4,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import com.pk.core.model.constant.UrlConstant;
 import lombok.RequiredArgsConstructor;
 
+import com.pk.core.business.service.AdminOrderQuery;
 import com.pk.core.business.service.OrderService;
 import com.pk.core.business.web.AbstractRest;
 import com.pk.core.common.web.BaseRes;
@@ -46,12 +47,41 @@ public class AdminOrderRest extends AbstractRest {
                          @RequestParam(required = false) String paymentStatus,
                          @RequestParam(required = false) String fromDate,
                          @RequestParam(required = false) String toDate,
+                         @RequestParam(required = false) String dateField,
+                         @RequestParam(required = false) String skuCode,
+                         @RequestParam(required = false) String shippingMethod,
+                         @RequestParam(required = false) String provinceName,
+                         @RequestParam(required = false) String source,
+                         @RequestParam(required = false) String orderBy,
+                         @RequestParam(required = false) String orderType,
                          @RequestParam(required = false, defaultValue = "1") int page,
                          @RequestParam(required = false, defaultValue = "20") int take,
                          HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(
-                    orderService.searchForAdmin(search, status, paymentStatus, fromDate, toDate, page, take));
+            return restSuccessHandle.handleSuccess(orderService.searchForAdmin(new AdminOrderQuery(search, status,
+                    paymentStatus, fromDate, toDate, dateField, skuCode, shippingMethod, provinceName, source,
+                    orderBy, orderType, page, take)));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    /** Số đơn theo từng trạng thái, cùng bộ lọc với danh sách (trừ status/page/take) - thay cho N request đếm. */
+    @GetMapping(UrlAdminConstant.Order.BASE + "/counts")
+    public BaseRes counts(@RequestParam(required = false) String search,
+                           @RequestParam(required = false) String paymentStatus,
+                           @RequestParam(required = false) String fromDate,
+                           @RequestParam(required = false) String toDate,
+                           @RequestParam(required = false) String dateField,
+                           @RequestParam(required = false) String skuCode,
+                           @RequestParam(required = false) String shippingMethod,
+                           @RequestParam(required = false) String provinceName,
+                           @RequestParam(required = false) String source,
+                           HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(orderService.countsForAdmin(new AdminOrderQuery(search, null,
+                    paymentStatus, fromDate, toDate, dateField, skuCode, shippingMethod, provinceName, source,
+                    null, null, 1, 20)));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

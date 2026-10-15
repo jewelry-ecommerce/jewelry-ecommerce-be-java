@@ -2,6 +2,7 @@ package com.pk.core.business.service.impl;
 
 import lombok.RequiredArgsConstructor;
 
+import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.PromotionRepo;
 import com.pk.core.business.service.PromotionService;
 import com.pk.core.common.exception.ResourceNotFoundException;
@@ -20,6 +21,7 @@ import java.util.Locale;
 public class PromotionServiceImpl implements PromotionService {
 
     private final PromotionRepo promotions;
+    private final ProductRepo products;
 
     @Transactional(readOnly = true)
     @Override
@@ -81,14 +83,38 @@ public class PromotionServiceImpl implements PromotionService {
     }
 
     private void applyRequest(PromotionEntity p, AdminPromotionRequestDto req) {
+        String type = DiscountRules.type(req.getDiscountType(), java.util.Set.of("PERCENT", "FIXED", "FLAT_PRICE"), "chương trình khuyến mãi");
+        DiscountRules.value(type, req.getDiscountValue(), req.getMaxDiscountAmount());
+        DiscountRules.period(req.getStartsAt(), req.getEndsAt());
+        String status = DiscountRules.status(req.getStatus());
+        validateProducts(req.getProductIds());
         p.setName(req.getName().trim());
-        p.setDiscountType(req.getDiscountType().trim().toUpperCase(Locale.ROOT));
+        p.setDiscountType(type);
         p.setDiscountValue(req.getDiscountValue());
-        p.setMaxDiscountAmount(req.getMaxDiscountAmount());
+        p.setMaxDiscountAmount("PERCENT".equals(type) ? req.getMaxDiscountAmount() : null);
         p.setStartsAt(req.getStartsAt());
         p.setEndsAt(req.getEndsAt());
-        if (req.getStatus() != null && !req.getStatus().isBlank()) {
-            p.setStatus(req.getStatus().trim().toUpperCase(Locale.ROOT));
+        if (status != null) {
+            p.setStatus(status);
+        }
+    }
+
+    /** Sản phẩm áp dụng: không trùng, tối đa 100, phải tồn tại và chưa bị xoá (tránh lỗi khoá ngoại 500). */
+    private void validateProducts(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            throw DiscountRules.invalid("Phải áp dụng cho ít nhất 1 sản phẩm", "productIds");
+        }
+        if (productIds.size() > DiscountRules.MAX_PRODUCTS_PER_PROMOTION) {
+            throw DiscountRules.invalid("Tối đa " + DiscountRules.MAX_PRODUCTS_PER_PROMOTION + " sản phẩm mỗi chương trình", "productIds");
+        }
+        if (new java.util.HashSet<>(productIds).size() != productIds.size()) {
+            throw DiscountRules.invalid("Danh sách sản phẩm bị trùng", "productIds");
+        }
+        for (Long id : productIds) {
+            var product = id == null ? null : products.findOne(id);
+            if (product == null || product.getDeletedDate() != null) {
+                throw DiscountRules.invalid("Sản phẩm không tồn tại: " + id, "productIds");
+            }
         }
     }
 

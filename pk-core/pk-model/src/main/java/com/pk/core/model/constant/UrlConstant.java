@@ -118,6 +118,8 @@ public class UrlConstant {
     @UtilityClass
     public static class Cms {
         public final String PAGES = Storefront.BASE + "/cms/pages";
+        /** Header (thanh thông báo đang chạy) + footer + logo đang dùng - công khai, chỉ GET. */
+        public final String SITE_LAYOUT = Storefront.BASE + "/cms/site-layout";
     }
 
     /** BannerRest (pk-api) - render banner theo mã vị trí (/storefront/banner/placements/code/{code}/render), công

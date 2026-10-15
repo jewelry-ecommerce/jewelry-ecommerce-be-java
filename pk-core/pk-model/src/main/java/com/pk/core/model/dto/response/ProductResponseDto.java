@@ -45,6 +45,13 @@ public class ProductResponseDto extends BaseDto {
     private Date publishedAt;
     /** Slug danh mục (service gán sau khi dựng DTO) - dùng cho field FE `category.slug`. */
     private String categorySlug;
+    /** Thương hiệu / mùa (V27), null = chưa gán. */
+    private Long brandId;
+    private String brandName;
+    private String brandCode;
+    private String brandImage;
+    private Long seasonId;
+    private String seasonName;
     /** Ảnh/video trong thư viện media (service nạp sau khi dựng DTO). */
     private List<ProductMediaResponseDto> media = new ArrayList<>();
 
@@ -174,8 +181,9 @@ public class ProductResponseDto extends BaseDto {
         return id == null ? null : String.valueOf(id);
     }
 
+    /** Tên thương hiệu thật nếu sản phẩm đã gán, ngược lại tên mặc định của cửa hàng. */
     public String getBrandName() {
-        return BRAND_NAME;
+        return brandName != null ? brandName : BRAND_NAME;
     }
 
     public boolean getIsPurchasable() {
@@ -237,9 +245,10 @@ public class ProductResponseDto extends BaseDto {
 
     public Map<String, Object> getBrand() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("name", BRAND_NAME);
-        m.put("code", BRAND_CODE);
-        m.put("image", null);
+        boolean real = brandId != null && brandName != null;
+        m.put("name", real ? brandName : BRAND_NAME);
+        m.put("code", real && brandCode != null ? brandCode : BRAND_CODE);
+        m.put("image", real ? brandImage : null);
         m.put("tenantCode", BRAND_CODE);
         return m;
     }

@@ -47,4 +47,10 @@ public interface ProductRepo extends PkRepo<ProductEntity, Long> {
                                          @Param("material") String material,
                                          @Param("minPrice") BigDecimal minPrice,
                                          @Param("maxPrice") BigDecimal maxPrice);
+
+    /** Số sản phẩm chưa xoá đang gắn thương hiệu này (chặn xoá thương hiệu đang dùng). */
+    Long countByBrandId(@Param("brandId") Long brandId);
+
+    /** Số sản phẩm chưa xoá đang gắn mùa này. */
+    Long countBySeasonId(@Param("seasonId") Long seasonId);
 }

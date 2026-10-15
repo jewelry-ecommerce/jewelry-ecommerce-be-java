@@ -44,6 +44,10 @@ public class AdminProductExtraRequestDto {
     private String metaDescription;
     @Size(max = 500)
     private String metaKeywords;
+
+    /** Thương hiệu / mùa (V27), tuỳ chọn; PUT không gửi = bỏ gán. */
+    private Long brandId;
+    private Long seasonId;
     @Size(max = 50, message = "Tối đa 50 khối thông tin bổ sung")
     private List<@Valid @NotNull Info> productInfos;
     /** Id các sản phẩm phối kèm (tối đa 20, không trùng, không gồm chính nó, phải tồn tại). */

@@ -103,6 +103,14 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "version")
     private long version;
 
+    /** Thương hiệu (V27), null = chưa gán. */
+    @Column(name = "brand_id")
+    private Long brandId;
+
+    /** Mùa (V27), null = chưa gán. */
+    @Column(name = "season_id")
+    private Long seasonId;
+
     public ProductEntity(Long categoryId, String code, String name, String slug) {
         this.categoryId = categoryId;
         this.code = code;

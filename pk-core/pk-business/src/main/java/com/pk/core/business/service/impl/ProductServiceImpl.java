@@ -11,7 +11,11 @@ import com.pk.core.business.repository.ProductInfoRepo;
 import com.pk.core.business.repository.ProductMediaRepo;
 import com.pk.core.business.repository.ProductMixMatchRepo;
 import com.pk.core.business.repository.ProductRepo;
+import com.pk.core.business.repository.BrandRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
+import com.pk.core.business.repository.SeasonRepo;
+import com.pk.core.model.entity.BrandEntity;
+import com.pk.core.model.entity.SeasonEntity;
 import com.pk.core.business.repository.SkuAttributeValueRepo;
 import com.pk.core.business.service.AdminProductQuery;
 import com.pk.core.business.service.ProductSearchQuery;
@@ -74,6 +78,8 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepo products;
     private final ProductSkuRepo productSkus;
+    private final BrandRepo brandRepo;
+    private final SeasonRepo seasonRepo;
     private final CategoryRepo categories;
     private final ProductAttributeValueRepo attributeValues;
     private final CollectionRepo collections;
@@ -90,7 +96,8 @@ public class ProductServiceImpl implements ProductService {
     @org.springframework.beans.factory.annotation.Value("${app.pim.require-approval:false}")
     private boolean requireApproval;
 
-    @Transactional(readOnly = true)
+    /** noRollbackFor: CmsServiceImpl gọi hàm này trong giao dịch của nó và bỏ qua 404 - không được đánh dấu rollback-only cả giao dịch ngoài. */
+    @Transactional(readOnly = true, noRollbackFor = ResourceNotFoundException.class)
     @Override
     public ProductResponseDto findBySlug(String slug) {
         ProductEntity p = products.findBySlug(slug);
@@ -391,6 +398,15 @@ public class ProductServiceImpl implements ProductService {
 
     private static final java.time.ZoneId ZONE = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
 
+    /** Tồn khả dụng sản phẩm = tổng available các SKU: 0 -> OUT_OF_STOCK, <= 5 -> LOW_STOCK, còn lại IN_STOCK. */
+    private String stockStatusOf(Long productId) {
+        int available = 0;
+        for (ProductSkuEntity sku : productSkus.findByProductId(productId)) {
+            available += sku.available();
+        }
+        return available <= 0 ? "OUT_OF_STOCK" : available <= 5 ? "LOW_STOCK" : "IN_STOCK";
+    }
+
     /** SQL lọc status/danh mục/bộ sưu tập/từ khoá; giá và thời gian lọc tiếp ở Java. */
     private List<ProductEntity> adminMatch(AdminProductQuery q) {
         String status = nullToEmpty(q.status()).toUpperCase();
@@ -417,6 +433,12 @@ public class ProductServiceImpl implements ProductService {
                     "approvalStatus không hợp lệ: " + q.approvalStatus() + " (PENDING | APPROVED | REJECTED | CANCELLED)",
                     q.approvalStatus());
         }
+        String stockFilter = nullToEmpty(q.stockStatus()).trim().toUpperCase();
+        if (!stockFilter.isEmpty() && !Set.of("IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK").contains(stockFilter)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "stockStatus không hợp lệ: " + q.stockStatus() + " (IN_STOCK | LOW_STOCK | OUT_OF_STOCK)",
+                    q.stockStatus());
+        }
         List<ProductEntity> out = new ArrayList<>();
         for (ProductEntity p : products.searchAdmin(status, nullToEmpty(q.categorySlug()),
                 nullToEmpty(q.collectionSlug()), nullToEmpty(q.keyword()))) {
@@ -424,6 +446,15 @@ public class ProductServiceImpl implements ProductService {
                 continue;
             }
             if (q.maxPrice() != null && (p.getBasePrice() == null || p.getBasePrice().compareTo(q.maxPrice()) > 0)) {
+                continue;
+            }
+            if (q.brandId() != null && !q.brandId().equals(p.getBrandId())) {
+                continue;
+            }
+            if (q.seasonId() != null && !q.seasonId().equals(p.getSeasonId())) {
+                continue;
+            }
+            if (!stockFilter.isEmpty() && !stockFilter.equals(stockStatusOf(p.getId()))) {
                 continue;
             }
             if (approvalFilter != null || q.hasPendingApproval() != null) {
@@ -545,6 +576,7 @@ public class ProductServiceImpl implements ProductService {
         p.setOccasion(req.getOccasion());
         p.setThumbnailUrl(req.getThumbnailUrl());
         applyPim(p, req, true);
+        applyBrandSeason(p, req);
         validateMixMatch(null, req.getProductMixMatch());
         products.create(p);
         saveInfos(p.getId(), req.getProductInfos());
@@ -590,6 +622,7 @@ public class ProductServiceImpl implements ProductService {
         p.setOccasion(req.getOccasion());
         p.setThumbnailUrl(req.getThumbnailUrl());
         applyPim(p, req, false);
+        applyBrandSeason(p, req);
         p.touch();
         products.update(p);
         if (req.getProductInfos() != null) {
@@ -632,7 +665,7 @@ public class ProductServiceImpl implements ProductService {
     public List<ProductSkuResponseDto> findVariantsByProductId(Long productId) {
         requireProduct(productId);
         List<ProductSkuResponseDto> dtos = productSkus.findByProductId(productId).stream()
-                .map(ProductSkuResponseDto::from).toList();
+                .map(ProductServiceImpl::adminSkuView).toList();
         attachBindings(productId, dtos);
         return dtos;
     }
@@ -658,19 +691,22 @@ public class ProductServiceImpl implements ProductService {
         return toAdminDto(p, productSkus.findByProductId(p.getId()));
     }
 
+    /** DTO SKU cho admin: kèm trường chỉ admin thấy (giá vốn, giá sỉ, thuế riêng, kích thước). Storefront KHÔNG dùng hàm này. */
+    private static ProductSkuResponseDto adminSkuView(ProductSkuEntity sku) {
+        ProductSkuResponseDto d = ProductSkuResponseDto.from(sku);
+        d.setCostPrice(sku.getCostPrice());
+        d.setB2bWholesalePrice(sku.getB2bWholesalePrice());
+        d.setTaxRateOverride(sku.getTaxRateOverride());
+        d.setLength(sku.getLength());
+        d.setWidth(sku.getWidth());
+        d.setHeight(sku.getHeight());
+        return d;
+    }
+
     private ProductResponseDto toAdminDto(ProductEntity p, List<ProductSkuEntity> skuEntities) {
         CategoryEntity category = p.getCategoryId() != null ? categories.findOne(p.getCategoryId()) : null;
 
-        List<ProductSkuResponseDto> skus = skuEntities.stream().map(sku -> {
-            ProductSkuResponseDto d = ProductSkuResponseDto.from(sku);
-            d.setCostPrice(sku.getCostPrice());
-            d.setB2bWholesalePrice(sku.getB2bWholesalePrice());
-            d.setTaxRateOverride(sku.getTaxRateOverride());
-            d.setLength(sku.getLength());
-            d.setWidth(sku.getWidth());
-            d.setHeight(sku.getHeight());
-            return d;
-        }).toList();
+        List<ProductSkuResponseDto> skus = skuEntities.stream().map(ProductServiceImpl::adminSkuView).toList();
         attachBindings(p.getId(), skus);
 
         BigDecimal priceFrom = skuEntities.stream()
@@ -686,6 +722,18 @@ public class ProductServiceImpl implements ProductService {
         ProductResponseDto dto = ProductResponseDto.from(p, category != null ? category.getName() : null, priceFrom,
                 skus, productCollections);
         dto.setCategorySlug(category != null ? category.getSlug() : null);
+        if (p.getBrandId() != null) {
+            BrandEntity brand = brandRepo.findOne(p.getBrandId());
+            dto.setBrandId(p.getBrandId());
+            dto.setBrandName(brand != null ? brand.getName() : null);
+            dto.setBrandCode(brand != null ? brand.getCode() : null);
+            dto.setBrandImage(brand != null ? brand.getImageUrl() : null);
+        }
+        if (p.getSeasonId() != null) {
+            SeasonEntity season = seasonRepo.findOne(p.getSeasonId());
+            dto.setSeasonId(p.getSeasonId());
+            dto.setSeasonName(season != null ? season.getName() : null);
+        }
         dto.setMedia(productMedia.findByProductId(p.getId()).stream().map(ProductMediaResponseDto::from).toList());
         dto.setUnitOfMeasure(p.getUnitOfMeasure());
         dto.setTaxRateOverride(p.getTaxRateOverride());
@@ -743,6 +791,32 @@ public class ProductServiceImpl implements ProductService {
         p.setMetaTitle(blankToNull(req.getMetaTitle()));
         p.setMetaDescription(blankToNull(req.getMetaDescription()));
         p.setMetaKeywords(blankToNull(req.getMetaKeywords()));
+    }
+
+    /** Gán thương hiệu/mùa (null = bỏ gán). Phải tồn tại và chưa xoá; thương hiệu INACTIVE / mùa không hoạt động chỉ được giữ nếu sản phẩm đã gắn sẵn. */
+    private void applyBrandSeason(ProductEntity p, AdminProductExtraRequestDto req) {
+        Long brandId = req.getBrandId();
+        if (brandId != null) {
+            BrandEntity b = brandRepo.findOne(brandId);
+            if (b == null || b.getDeletedDate() != null) {
+                throw BusinessException.badRequest("BRAND_INVALID", "Thương hiệu không tồn tại: " + brandId, "brandId");
+            }
+            if (!BrandEntity.ACTIVE.equals(b.getStatus()) && !brandId.equals(p.getBrandId())) {
+                throw BusinessException.badRequest("BRAND_INVALID", "Thương hiệu đang ngừng kích hoạt: " + b.getName(), "brandId");
+            }
+        }
+        Long seasonId = req.getSeasonId();
+        if (seasonId != null) {
+            SeasonEntity se = seasonRepo.findOne(seasonId);
+            if (se == null || se.getDeletedDate() != null) {
+                throw BusinessException.badRequest("SEASON_INVALID", "Mùa không tồn tại: " + seasonId, "seasonId");
+            }
+            if (!se.isActive() && !seasonId.equals(p.getSeasonId())) {
+                throw BusinessException.badRequest("SEASON_INVALID", "Mùa đang ngừng hoạt động: " + se.getName(), "seasonId");
+            }
+        }
+        p.setBrandId(brandId);
+        p.setSeasonId(seasonId);
     }
 
     private static String blankToNull(String s) {
@@ -1047,7 +1121,7 @@ public class ProductServiceImpl implements ProductService {
     // ===================== THUỘC TÍNH CỦA SKU =====================
 
     private ProductSkuResponseDto skuDto(ProductSkuEntity sku) {
-        ProductSkuResponseDto dto = ProductSkuResponseDto.from(sku);
+        ProductSkuResponseDto dto = adminSkuView(sku);
         attachBindings(sku.getProductId(), List.of(dto));
         return dto;
     }
