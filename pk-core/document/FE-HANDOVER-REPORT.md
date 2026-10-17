@@ -9,8 +9,8 @@ Contract chi tiết từng API (method, path, auth, query, body, header, field +
 | Hạng mục | Kết quả | Môi trường |
 |---|---|---|
 | Biên dịch 7 module | OK | JDK 21, `--release 17` (cloud, không qua Maven) |
-| Unit + Integration test | **340 / 340 pass** | H2 (MODE=PostgreSQL), cloud |
-| Migration V12–V34 trên PostgreSQL thật | **CHƯA kiểm chứng** | cloud không có PostgreSQL; cần chạy Flyway + `mvn test` trên máy chủ dự án |
+| Unit + Integration test | **353 / 353 pass** | H2 (MODE=PostgreSQL) và PostgreSQL 16.2 thật (Flyway V1→V36), cloud |
+| Migration V1→V36 trên PostgreSQL thật | **Đã chạy** | PostgreSQL 16.2, cài mới từ V1: 36 migration thành công; 353/353 test chạy trên chính DB đó (kể cả duyệt song song, concurrency); import CSV chạy end-to-end qua ứng dụng thật (không có RepoTxTestConfig) |
 | `mvn test` trên máy chủ dự án | cần chạy lại | chưa xác nhận sau các thay đổi đợt này |
 
 Kết quả H2 không thay thế kiểm tra PostgreSQL. Không báo "full done".
@@ -102,7 +102,7 @@ V12 cms_visibility_seo · V13 sku_attribute_values · V14 product_media · V15 g
 ## 6. Còn thiếu / cần owner chốt
 Bản gọn gửi FE: `FE-NOTE-CON-LAI.md`.
 
-1. Chạy migration V12–V34 + toàn bộ test trên **PostgreSQL thật** rồi gửi log.
+1. (Đã chạy phía BE trên PostgreSQL 16.2) FE nên chạy lại `verify-java-v7.mjs` trên DB cô lập để nghiệm thu.
 2. Ngoài phạm vi (đã chốt): thanh toán online, GHN/3PL, hoá đơn VAT, Fast FBO, kho, review sản phẩm, quota khuyến mãi (mục 7).
 3. Dashboard `topProducts`/`lowStock` tính trong Java (đủ cho quy mô đồ án); nếu dữ liệu lớn cần chuyển sang SQL tổng hợp.
 
@@ -139,3 +139,31 @@ Bảng mới: `order_notes`, `order_audit_logs`, `order_returns`, `order_return_
 - Authoring contract V2: `condition-config-options` / `benefit-config-options` trả định nghĩa form (`authoringContractVersion 2.0.0`, `configType`, `configVersion 1.0.0`); PUT body `{configType, configVersion, values}`; BE lưu cả `config` chuẩn hoá lẫn `authoringValues`. Mã voucher: 3–40 ký tự `[A-Z0-9_-]`, trùng → 409 `DUPLICATE_CODE`; chính sách hiển thị `PUBLIC|PRIVATE` (PRIVATE cần kênh ZNS/EMAIL/OTHER).
 - Runtime: `runtime/evaluate` (cùng công thức engine giá), `drafts/{id}/simulate` (published + draft, trả conflict `DRAFT_REPLACES_PUBLISHED`…), discover/validate voucher (lý do `VOUCHER_VALID`, `VOUCHER_NOT_FOUND`, `VOUCHER_MIN_ORDER_NOT_MET`…), tra khách theo SĐT.
 - Giới hạn: xem `FE-NOTE-CON-LAI.md` A4.
+
+## 8. Đợt 4 — sửa lỗi FE v7 báo (V35)
+
+Nguồn: `yeu cau/backend-v7`. FE đã chạy Flyway V27→V34 trên PostgreSQL 16 và tái hiện 4 lỗi BE; đã sửa như sau (test: 353/352).
+
+| Lỗi FE báo | Nguyên nhân | Sửa |
+|---|---|---|
+| Duyệt đổi/trả song song chạy tác dụng phụ nhiều lần | `approve` kiểm trạng thái rồi mới ghi, không khoá | `OrderReturnRepo.updateStatusIfCurrent` (UPDATE có điều kiện `Pending -> ...`) chạy TRƯỚC mọi tác dụng phụ trong `approve`, `reject`, `update`. Request thua nhận 409 `INVALID_STATUS_TRANSITION`; lỗi giữa chừng rollback cả trạng thái. Test: 4 request duyệt song song => đúng 1 thành công; duyệt/từ chối/huỷ song song => đúng 1 thắng. |
+| Giá đổi hàng lệch giữa số hoàn, chênh lệch, đơn thay thế | Số hoàn dùng `exchangeTotal` đã lưu lúc báo giá, đơn thay thế tính giá hiện tại | Một quy tắc: `exchangeUnitPrice` (giá hiệu lực − khuyến mãi sản phẩm). Lúc duyệt so tổng hàng đổi theo giá hiện tại với giá đã lưu; lệch (hoặc SKU đổi ngừng bán) => 409 `ORDER_RETURN_QUOTE_STALE` trước mọi tác dụng phụ, yêu cầu vẫn `Pending`. |
+| Báo giá lại yêu cầu đang sửa | Báo giá tính cả phần giữ chỗ của chính yêu cầu | `POST /admin/order-returns/quote` nhận thêm `returnId` (id hoặc mã RT): bỏ phần giữ chỗ của chính nó, trường trống lấy từ yêu cầu hiện có; yêu cầu phải `Pending` và thuộc đúng đơn. `PUT /{id}` kèm `pricingQuote.fingerprint` cũ => 409 `ORDER_RETURN_QUOTE_STALE`. |
+| Voucher chiến dịch mất target SKU lúc checkout | `materializeVoucher` không lưu target; voucher cũ không có cột target nên giảm cả giỏ | Bảng `voucher_scope_skus` (V35, INCLUDE/EXCLUDE theo SKU) ghi lúc phát hành (ALL = không giới hạn, MANUAL = SKU chọn, CATEGORY/COLLECTION = mọi SKU của sản phẩm khớp, trừ `excludedSkuIds`; target giới hạn mà rỗng => 400 `PROMOTION_TARGET_EMPTY`). `VoucherService.apply(code, lines)` dùng chung cho storefront quote, admin quote/tạo/sửa đơn: chỉ giảm trên dòng đủ điều kiện, giá trị tối thiểu tính trên phần đó, không có dòng nào => 400 `VOUCHER_NO_ELIGIBLE_ITEMS`. Voucher cũ (không phạm vi) hành xử như trước. Phạm vi chụp lúc phát hành (SKU thêm vào danh mục sau không tự được hưởng voucher). |
+| Import CSV tạo sản phẩm mới: "not existing a transaction" | `ProductService.create(req)` là default method gọi `create(req, null)` trên target nên bỏ qua proxy `@Transactional`; import không có giao dịch | `ProductServiceImpl` override `create(req)` có `@Transactional`. Test H2 không bắt được vì `RepoTxTestConfig` tự bọc repo trong giao dịch, nên thêm `TransactionBoundaryTest` (reflection) khoá ranh giới giao dịch. |
+
+Lỗi phát hiện thêm khi viết test: báo giá admin có mã voucher bị từ chối (hết hạn, chưa đủ tối thiểu...) trả 500 `UnexpectedRollbackException`. `VoucherService.validate/apply` giờ có `noRollbackFor = BusinessException`.
+
+### 8.1 Phần còn lại của danh sách FE v7 (đã làm)
+
+- **Sửa đơn admin (`PUT /admin/orders/{id}`)**: `updateByAdmin` khoá dòng đơn bằng CAS trạng thái (`guardTransition(order, status)`) rồi đọc lại đơn sau khi giữ khoá. Huỷ/đổi trạng thái chen vào giữa => 409 `INVALID_STATUS_TRANSITION`; hai lần sửa song song được xếp hàng (cả hai thành công, số lượng cuối là của lần sau, tồn giữ chỗ khớp). Test: `OmsAdminHardeningIT` (2 sửa song song; sửa vs huỷ).
+- **Tra khách theo SĐT cho ORDER_MANAGER**: thêm `GET /admin/orders/customer-audience/by-phone?phone=` (cùng handler với `/admin/promotions/customer-audience/by-phone`, vốn chỉ ADMIN/CATALOG_MANAGER). 404 nếu không có khách.
+- **Xoá vị trí banner đang được CMS dùng**: `DELETE /admin/banner/placements/{id}` trả 409 `PLACEMENT_IN_USE_BY_CMS` (kèm số block) khi còn block BANNER của trang CMS chưa xoá tham chiếu `config.placementCode`; vẫn giữ 409 `PLACEMENT_IN_USE` khi còn banner. Trang đã xoá mềm không tính.
+- **Quy ước `data`**: BE cấu hình Jackson `non_null`, nên thành công mà `data` rỗng/null thì body KHÔNG có khóa `data` (vd `{ "status":200, "message":"OK", "title":"Thành công", "time":... }`). FE coi thiếu `data` là `null`. Không đổi cấu hình serialize toàn cục để tránh ảnh hưởng các response khác.
+
+### 8.2 Khuyến mãi sản phẩm theo SKU (V36) và kiểm chứng PostgreSQL
+
+- **SKU anh em**: trước đây wizard hiện thực MARKDOWN/FLAT_PRICE ở mức sản phẩm (`promotion_products`), nên chọn SKU A vẫn giảm cả SKU A2 cùng sản phẩm ở tiền thật, trong khi engine runtime của wizard (tính theo SKU) báo không giảm. V36 thêm `promotion_scope_skus` (INCLUDE/EXCLUDE theo SKU); `materializePromotion` ghi MANUAL = INCLUDE các SKU chọn, mọi loại target = EXCLUDE `excludedSkuIds`. `PromotionPricingService.unitDiscount(productId, skuId, unitPrice)` (overload mới) được giỏ hàng, báo giá, tạo/sửa đơn, đơn đổi hàng và giá hiển thị storefront dùng; khuyến mãi cũ (không có dòng phạm vi) giữ nguyên. Sửa danh sách sản phẩm của khuyến mãi qua API cũ xoá phạm vi SKU. Test: `PromotionVoucherScopeIT.markdownCampaignOnOneSkuDoesNotDiscountSiblingSku`.
+- **PostgreSQL**: BE đã tự dựng PostgreSQL 16.2, chạy Flyway từ V1 (cài mới) đến V36, chạy toàn bộ 353 test trên DB đó và import CSV thật qua ứng dụng đang chạy (kết quả `DONE`, 1/1 dòng, product + SKU + tồn được tạo). Chưa chạy `verify-java-v7.mjs` của FE (script ở repo FE).
+
+Việc còn lại: FE chạy lại `verify-java-v7.mjs` trên DB cô lập, kỳ vọng không còn REPRODUCED/FAIL.

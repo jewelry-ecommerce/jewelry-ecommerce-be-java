@@ -10,4 +10,10 @@ public interface PromotionPricingService {
 
     /** Số tiền giảm trên 1 đơn vị sản phẩm `productId` bán giá `unitPrice`; 0 nếu không có khuyến mãi. */
     BigDecimal unitDiscount(Long productId, BigDecimal unitPrice);
+
+    /**
+     * Như trên nhưng theo SKU: khuyến mãi có phạm vi SKU (sinh từ chiến dịch wizard, bảng promotion_scope_skus) chỉ áp cho
+     * SKU thuộc phạm vi - SKU anh em cùng sản phẩm KHÔNG được giảm. MỌI nơi tính tiền thật phải dùng overload này.
+     */
+    BigDecimal unitDiscount(Long productId, Long skuId, BigDecimal unitPrice);
 }

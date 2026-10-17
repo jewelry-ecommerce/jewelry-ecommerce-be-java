@@ -1,7 +1,7 @@
 # Ghi chú gửi FE: BE đã làm gì, FE cần nối gì, còn thiếu gì
 
 Cập nhật 2026-10-17. Chi tiết từng API: `FE-API-CONTRACT.md` (sinh tự động từ source). Quy tắc nghiệp vụ: `FE-HANDOVER-REPORT.md`.
-Test BE: **340/340 pass trên H2**. Migration V12–V34 trên PostgreSQL thật **chưa kiểm chứng**.
+Test BE: **353/353 pass** trên H2 và trên PostgreSQL 16.2 thật (Flyway V1→V36 cài mới). `verify-java-v7.mjs` của FE chưa chạy lại.
 Tiền tố `/api/v1`; thành công `{ "data": ... }`; lỗi `{ status, message, errors:[{code,message}], dependencies? }` kèm HTTP status thật. Id luôn là số (FE tiếp tục `toUiEntityIds`).
 
 ## A. BE đã có thêm (đợt FE v6) — FE bỏ chặn "Java chưa có API" và nối
@@ -38,6 +38,17 @@ Snapshot SKU ở dòng đơn (`skuCode`, `sizeLabel`, `metalColorLabel`); `shipp
 - Target: `ALL|CATEGORY|COLLECTION|MANUAL` (không `UPLOAD_FILE`); audience chỉ `ALL`; applicability chỉ `ONLINE`; `lineFilter` chỉ `ANY`; **không có quota** (`quota-statistics` trả mảng rỗng). Chọn SKU được hiện thực ở mức sản phẩm.
 - Xoá nháp = chuyển `DISCARDED`. Phát hành → tạo khuyến mãi/voucher thật cho engine giá hiện có. Tạm dừng/tiếp tục/kết thúc/bỏ phát hành schema đổi trạng thái hàng thật.
 - Endpoint v1 cũ (`promotion/promotions` kiểu legacy) không làm vì FE không gọi.
+
+### A5. Sửa lỗi FE v7 báo (V35) — xem `FE-HANDOVER-REPORT.md` mục 8
+- Duyệt/từ chối/huỷ đổi-trả song song: chỉ 1 request thắng, các request còn lại 409.
+- Duyệt đổi hàng khi giá hàng đổi lệch báo giá: 409 `ORDER_RETURN_QUOTE_STALE`, yêu cầu vẫn `Pending` => FE báo giá lại bằng `POST /admin/order-returns/quote` với `returnId`, rồi `PUT /admin/order-returns/{id}` kèm `pricingQuote`.
+- Voucher chiến dịch giữ target SKU ở mọi đường báo giá/đặt hàng; lỗi mới `VOUCHER_NO_ELIGIBLE_ITEMS` (giỏ không có dòng đủ điều kiện). Phát hành voucher có target rỗng => `PROMOTION_TARGET_EMPTY`.
+- Import CSV tạo sản phẩm mới chạy được trong giao dịch (đã thử end-to-end trên PostgreSQL).
+- Khuyến mãi MARKDOWN/FLAT_PRICE chọn SKU nào thì chỉ SKU đó được giảm (SKU anh em cùng sản phẩm không còn bị giảm lây) — V36.
+- Sửa đơn admin song song với huỷ/sửa khác: xếp hàng hoặc 409 `INVALID_STATUS_TRANSITION`.
+- ORDER_MANAGER tra khách: `GET /admin/orders/customer-audience/by-phone?phone=` (đường dẫn `/admin/promotions/...` vẫn chỉ ADMIN/CATALOG_MANAGER).
+- Xoá vị trí banner còn block CMS dùng: 409 `PLACEMENT_IN_USE_BY_CMS`.
+- Thành công không có dữ liệu thì body KHÔNG có khóa `data` (Jackson non_null): FE coi là `null`.
 
 ## B. FE cần làm
 1. Áp bảng A1: viết/sửa adapter Java cho Navigation, Search-pinned, Product-list banner, Promotion wizard, OMS nâng cao; ngừng ném "Java chưa có API" cho các tính năng trên.

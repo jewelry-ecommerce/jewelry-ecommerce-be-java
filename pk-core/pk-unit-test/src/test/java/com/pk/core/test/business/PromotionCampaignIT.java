@@ -209,8 +209,8 @@ class PromotionCampaignIT extends IntegrationTestBase {
         mvc.perform(post(comp + "/publish").header("Authorization", admin)).andExpect(status().isConflict());
 
         // ---- engine giá thật dùng chiến dịch vừa phát hành (giảm 20% tối đa 15k trên sản phẩm A)
-        assertEquals(0, new BigDecimal("15000").compareTo(pricing.unitDiscount(a[0], new BigDecimal("100000"))));
-        assertEquals(0, BigDecimal.ZERO.compareTo(pricing.unitDiscount(b[0], new BigDecimal("50000"))));
+        assertEquals(0, new BigDecimal("15000").compareTo(pricing.unitDiscount(a[0], a[1], new BigDecimal("100000"))));
+        assertEquals(0, BigDecimal.ZERO.compareTo(pricing.unitDiscount(b[0], b[1], new BigDecimal("50000"))));
 
         // ---- voucher validate / discover
         String validate = V1 + UrlAdminConstant.Promotion.ORDER_VOUCHER_VALIDATE;
@@ -254,14 +254,14 @@ class PromotionCampaignIT extends IntegrationTestBase {
 
         // ---- vòng đời: pause -> engine ngừng; resume -> chạy lại; gỡ schema; end
         assertEquals("PAUSED", ok(mvc.perform(post(PUBLISHED + "/" + pid + "/pause").header("Authorization", admin))).get("status").asText());
-        assertEquals(0, BigDecimal.ZERO.compareTo(pricing.unitDiscount(a[0], new BigDecimal("100000"))));
+        assertEquals(0, BigDecimal.ZERO.compareTo(pricing.unitDiscount(a[0], a[1], new BigDecimal("100000"))));
         assertFalse(ok(mvc.perform(jsonRequest(post(validate), Map.of("code", code)).header("Authorization", admin))).get("valid").asBoolean());
         mvc.perform(post(PUBLISHED + "/" + pid + "/pause").header("Authorization", admin)).andExpect(status().isConflict());
         assertEquals("ACTIVE", ok(mvc.perform(post(PUBLISHED + "/" + pid + "/resume").header("Authorization", admin))).get("status").asText());
-        assertEquals(0, new BigDecimal("15000").compareTo(pricing.unitDiscount(a[0], new BigDecimal("100000"))));
+        assertEquals(0, new BigDecimal("15000").compareTo(pricing.unitDiscount(a[0], a[1], new BigDecimal("100000"))));
         JsonNode un = ok(mvc.perform(post(PUBLISHED + "/" + pid + "/schemas/" + sid1 + "/unpublish").header("Authorization", admin)));
         assertEquals("UNPUBLISHED", un.get("displayStatus").asText());
-        assertEquals(0, BigDecimal.ZERO.compareTo(pricing.unitDiscount(a[0], new BigDecimal("100000"))));
+        assertEquals(0, BigDecimal.ZERO.compareTo(pricing.unitDiscount(a[0], a[1], new BigDecimal("100000"))));
         mvc.perform(post(PUBLISHED + "/" + pid + "/schemas/" + sid1 + "/unpublish").header("Authorization", admin)).andExpect(status().isConflict());
         assertEquals("ENDED", ok(mvc.perform(post(PUBLISHED + "/" + pid + "/end").header("Authorization", admin))).get("status").asText());
         assertFalse(ok(mvc.perform(jsonRequest(post(validate), Map.of("code", code)).header("Authorization", admin))).get("valid").asBoolean());

@@ -256,6 +256,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | Field | Kiểu | Ràng buộc |
 |---|---|---|
 | `orderId` | `String` |  |
+| `returnId` | `String` |  |
 | `type` | `String` |  |
 | `reason` | `String` |  |
 | `note` | `String` |  |
@@ -1611,6 +1612,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | POST | `/admin/promotions/vouchers/validate-code` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
 | POST | `/admin/orders/promotion-vouchers/validate-code` | ADMIN, ORDER_MANAGER |  | `Map<String, Object>` |  |
 | GET | `/admin/promotions/customer-audience/by-phone` | ADMIN, CATALOG_MANAGER | `phone` |  |  |
+| GET | `/admin/orders/customer-audience/by-phone` | ADMIN, ORDER_MANAGER | `phone` |  |  |
 
 ### DTO
 

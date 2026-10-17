@@ -333,7 +333,7 @@ public class ProductServiceImpl implements ProductService {
                     ProductSkuResponseDto dto = ProductSkuResponseDto.from(sku);
                     BigDecimal price = sku.effectivePrice();
                     BigDecimal discount = price == null ? BigDecimal.ZERO
-                            : promotionPricing.unitDiscount(p.getId(), price);
+                            : promotionPricing.unitDiscount(p.getId(), sku.getId(), price);
                     if (discount.signum() > 0) {
                         dto.setSalePrice(price.subtract(discount));
                     }
@@ -580,6 +580,14 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponseDto findByIdForAdmin(Long productId) {
         ProductEntity p = requireProduct(productId);
         return withDetail(toAdminDto(p), p);
+    }
+
+    /** Override rõ ràng để lời gọi qua proxy (vd. import CSV) luôn có giao dịch: default method của interface
+     *  gọi create(req, null) trên target nên sẽ bỏ qua proxy @Transactional. */
+    @Transactional
+    @Override
+    public ProductResponseDto create(AdminCreateProductRequestDto req) {
+        return create(req, null);
     }
 
     @Transactional

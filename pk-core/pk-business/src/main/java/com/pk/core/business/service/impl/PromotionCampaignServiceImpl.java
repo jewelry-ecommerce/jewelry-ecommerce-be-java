@@ -903,9 +903,9 @@ public class PromotionCampaignServiceImpl implements PromotionCampaignService {
             schemaComponentCount += sc.size();
             Map<String, Object> benefit = PromoJson.readMap(sc.stream().filter(c -> "BENEFIT".equals(c.getKind())).findFirst().orElseThrow().getConfig());
             if ("VOUCHER".equals(s.getSchemaType())) {
-                materializeVoucher(d, s, sc, benefit, from, to, actorId);
+                materializeVoucher(d, s, sc, benefit, target, from, to, actorId);
             } else {
-                materializePromotion(d, s, benefit, productIds, from, to, actorId);
+                materializePromotion(d, s, benefit, productIds, target, from, to, actorId);
             }
         }
         d.setStatus("PUBLISHED");
@@ -927,7 +927,8 @@ public class PromotionCampaignServiceImpl implements PromotionCampaignService {
         return out;
     }
 
-    private void materializePromotion(PromoDraftEntity d, PromoSchemaEntity s, Map<String, Object> benefit, Set<Long> productIds, Date from, Date to, Long actorId) {
+    private void materializePromotion(PromoDraftEntity d, PromoSchemaEntity s, Map<String, Object> benefit, Set<Long> productIds,
+                                      Map<String, Object> target, Date from, Date to, Long actorId) {
         PromotionEntity p = new PromotionEntity();
         p.setName(trunc(d.getName() + " - " + s.getName(), 200));
         String type = String.valueOf(benefit.get("type"));
@@ -951,12 +952,33 @@ public class PromotionCampaignServiceImpl implements PromotionCampaignService {
         for (Long productId : productIds) {
             promotions.addProduct(p.getId(), productId);
         }
+        // Phạm vi SKU: engine giá tính theo (sản phẩm, SKU) nên SKU anh em không được chọn KHÔNG bị giảm giá.
+        // MANUAL = đúng các SKU chọn; mọi loại = trừ excludedSkuIds. CATEGORY/COLLECTION/ALL không cần INCLUDE (cả sản phẩm).
+        Set<Long> include = new LinkedHashSet<>();
+        Set<Long> exclude = new LinkedHashSet<>();
+        for (String sid : PromoJson.strings(target.get("excludedSkuIds"))) {
+            exclude.add(Long.valueOf(sid));
+        }
+        if ("MANUAL".equals(String.valueOf(target.get("type")))) {
+            for (String sid : PromoJson.strings(target.get("skuIds"))) {
+                Long id = Long.valueOf(sid);
+                if (!exclude.contains(id)) {
+                    include.add(id);
+                }
+            }
+        }
+        for (Long skuId : include) {
+            promotions.addScopeSku(p.getId(), "INCLUDE", skuId);
+        }
+        for (Long skuId : exclude) {
+            promotions.addScopeSku(p.getId(), "EXCLUDE", skuId);
+        }
         s.setLegacyPromotionId(p.getId());
         schemas.update(s);
     }
 
     private void materializeVoucher(PromoDraftEntity d, PromoSchemaEntity s, List<PromoSchemaComponentEntity> sc, Map<String, Object> benefit,
-                                    Date from, Date to, Long actorId) {
+                                    Map<String, Object> target, Date from, Date to, Long actorId) {
         PromoVoucherCodeEntity code = voucherOf(s.getId());
         if (vouchers.findByCode(code.getNormalizedCode()) != null) {
             throw BusinessException.conflict("DUPLICATE_CODE", "Mã voucher đã tồn tại: " + code.getNormalizedCode(), code.getNormalizedCode());
@@ -987,9 +1009,57 @@ public class PromotionCampaignServiceImpl implements PromotionCampaignService {
         }
         v.setStatus("ACTIVE".equals(code.getStatus()) ? VoucherEntity.PUBLISHED : VoucherEntity.DRAFT);
         v.setCreatedId(actorId);
+        // Phạm vi SKU của đối tượng áp dụng: lưu cùng voucher để checkout/báo giá/tạo đơn chỉ giảm trên dòng đủ điều kiện
+        // (voucher của SKU A không được giảm cho giỏ chỉ có SKU B). Chụp tại thời điểm phát hành, giống khuyến mãi sản phẩm.
+        Set<Long> include = new LinkedHashSet<>();
+        Set<Long> exclude = new LinkedHashSet<>();
+        voucherScope(target, include, exclude);
         vouchers.create(v);
+        for (Long skuId : include) {
+            vouchers.addScopeSku(v.getId(), "INCLUDE", skuId);
+        }
+        for (Long skuId : exclude) {
+            vouchers.addScopeSku(v.getId(), "EXCLUDE", skuId);
+        }
         code.setLegacyVoucherId(v.getId());
         voucherCodes.update(code);
+    }
+
+    /**
+     * Quy đổi đối tượng áp dụng thành phạm vi SKU: ALL = không giới hạn (chỉ có EXCLUDE nếu loại trừ SKU),
+     * MANUAL = đúng các SKU chọn, CATEGORY/COLLECTION = mọi SKU còn bán của các sản phẩm khớp. Đối tượng giới hạn mà
+     * không khớp SKU nào -> PROMOTION_TARGET_EMPTY (tránh voucher "không giới hạn" do danh sách rỗng).
+     */
+    private void voucherScope(Map<String, Object> target, Set<Long> include, Set<Long> exclude) {
+        String type = String.valueOf(target.get("type"));
+        Set<Long> excluded = new LinkedHashSet<>();
+        for (String sid : PromoJson.strings(target.get("excludedSkuIds"))) {
+            excluded.add(Long.valueOf(sid));
+        }
+        exclude.addAll(excluded);
+        if ("ALL".equals(type)) {
+            return;
+        }
+        if ("MANUAL".equals(type)) {
+            for (String sid : PromoJson.strings(target.get("skuIds"))) {
+                ProductSkuEntity sku = skus.findOne(Long.valueOf(sid));
+                if (sku != null && sku.getDeletedDate() == null) {
+                    include.add(sku.getId());
+                }
+            }
+        } else {
+            Set<Long> productIds = resolveProductIds(target);
+            for (ProductSkuEntity sku : skus.findAll(Sort.unsorted())) {
+                if (sku.getDeletedDate() == null && productIds.contains(sku.getProductId())) {
+                    include.add(sku.getId());
+                }
+            }
+        }
+        include.removeAll(excluded);
+        if (include.isEmpty()) {
+            throw BusinessException.badRequest("PROMOTION_TARGET_EMPTY",
+                    "Không có sản phẩm nào khớp đối tượng áp dụng của voucher trong chiến dịch");
+        }
     }
 
     // ================================================================== ĐÃ PHÁT HÀNH

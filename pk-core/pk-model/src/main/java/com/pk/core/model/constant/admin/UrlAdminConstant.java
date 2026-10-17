@@ -77,6 +77,8 @@ public class UrlAdminConstant {
         public final String VOUCHER_VALIDATE = BASE + "/vouchers/validate-code";
         public final String CUSTOMER_BY_PHONE = BASE + "/customer-audience/by-phone";
         /** Cùng nghiệp vụ discover/validate nhưng nằm trong nhóm /admin/orders/** để vai trò ORDER_MANAGER dùng được khi tạo đơn (FE: order/orders/promotion-vouchers/*). */
+        /** Tra khách theo SĐT cho màn tạo đơn: nằm dưới /admin/orders nên role chỉ có ORDER_MANAGER gọi được. */
+        public final String ORDER_CUSTOMER_BY_PHONE = Common.BASE + "/orders/customer-audience/by-phone";
         public final String ORDER_VOUCHER_DISCOVER = Common.BASE + "/orders/promotion-vouchers/discover";
         public final String ORDER_VOUCHER_VALIDATE = Common.BASE + "/orders/promotion-vouchers/validate-code";
     }

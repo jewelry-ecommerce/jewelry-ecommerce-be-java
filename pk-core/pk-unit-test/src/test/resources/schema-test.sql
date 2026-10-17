@@ -1130,3 +1130,17 @@ CREATE TABLE order_return_status_history (
     created_id    BIGINT,
     created_date  TIMESTAMP NOT NULL
 );
+
+CREATE TABLE voucher_scope_skus (
+    voucher_id BIGINT      NOT NULL REFERENCES vouchers (id) ON DELETE CASCADE,
+    scope_type VARCHAR(10) NOT NULL,
+    sku_id     BIGINT      NOT NULL,
+    PRIMARY KEY (voucher_id, scope_type, sku_id)
+);
+
+CREATE TABLE promotion_scope_skus (
+    promotion_id BIGINT      NOT NULL REFERENCES promotions (id) ON DELETE CASCADE,
+    scope_type   VARCHAR(10) NOT NULL,
+    sku_id       BIGINT      NOT NULL,
+    PRIMARY KEY (promotion_id, scope_type, sku_id)
+);

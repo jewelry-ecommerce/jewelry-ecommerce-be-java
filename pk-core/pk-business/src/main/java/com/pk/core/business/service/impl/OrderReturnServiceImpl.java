@@ -239,7 +239,7 @@ public class OrderReturnServiceImpl implements OrderReturnService {
                 if (!sellable(sku)) {
                     throw bad("Sản phẩm đổi " + e.getKey() + " không còn bán");
                 }
-                BigDecimal unit = sku.effectivePrice().subtract(promotionPricing.unitDiscount(sku.getProductId(), sku.effectivePrice()));
+                BigDecimal unit = exchangeUnitPrice(sku);
                 BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(e.getValue()));
                 ProductEntity product = products.findOne(sku.getProductId());
                 exchangeLines.add(new Line(null, sku.getId(), sku.getProductId(),
@@ -249,6 +249,31 @@ public class OrderReturnServiceImpl implements OrderReturnService {
             }
         }
         return new Plan(order, type, reason, returnLines, exchangeLines, returnTotal, exchangeTotal);
+    }
+
+    /** Đơn giá hàng đổi - MỘT quy tắc duy nhất cho báo giá, duyệt và đơn thay thế: giá hiệu lực trừ khuyến mãi sản phẩm
+     *  (cùng công thức placeOrder dùng cho đơn thay thế). */
+    private BigDecimal exchangeUnitPrice(ProductSkuEntity sku) {
+        return sku.effectivePrice().subtract(promotionPricing.unitDiscount(sku.getProductId(), sku.getId(), sku.effectivePrice()));
+    }
+
+    /** Tổng hàng đổi theo GIÁ HIỆN TẠI; null nếu có SKU không còn bán. Dùng để phát hiện giá đổi lệch báo giá lúc duyệt. */
+    private BigDecimal currentExchangeTotal(List<OrderReturnItemEntity> items) {
+        Map<Long, Integer> ex = new LinkedHashMap<>();
+        for (OrderReturnItemEntity i : items) {
+            if (KIND_EXCHANGE.equals(i.getKind())) {
+                ex.merge(i.getSkuId(), i.getQuantity(), Integer::sum);
+            }
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (Map.Entry<Long, Integer> e : ex.entrySet()) {
+            ProductSkuEntity sku = skus.findOne(e.getKey());
+            if (!sellable(sku)) {
+                return null;
+            }
+            total = total.add(exchangeUnitPrice(sku).multiply(BigDecimal.valueOf(e.getValue())));
+        }
+        return total;
     }
 
     private static String sha256(String text) {
@@ -275,7 +300,21 @@ public class OrderReturnServiceImpl implements OrderReturnService {
     @Transactional(readOnly = true)
     @Override
     public Map<String, Object> quote(OmsRequestDtos.OrderReturn req) {
-        Plan p = plan(req, null);
+        Long exclude = null;
+        if (req != null && req.getReturnId() != null && !req.getReturnId().isBlank()) {
+            // Báo giá lại cho yêu cầu Pending đang sửa: bỏ phần giữ chỗ của chính nó, trường trống lấy từ yêu cầu hiện có.
+            OrderReturnEntity cur = find(req.getReturnId());
+            requirePending(cur, "báo giá lại");
+            if (req.getOrderId() != null && !req.getOrderId().isBlank()
+                    && !findOrder(req.getOrderId()).getId().equals(cur.getOrderId())) {
+                throw bad("Yêu cầu " + cur.getCode() + " không thuộc đơn " + req.getOrderId());
+            }
+            OmsRequestDtos.OrderReturn merged = mergeWithExisting(cur, req);
+            merged.setStatus(req.getStatus());
+            req = merged;
+            exclude = cur.getId();
+        }
+        Plan p = plan(req, exclude);
         String fp = fingerprint(p);
         BigDecimal topUp = p.difference().max(BigDecimal.ZERO);
         Map<String, Object> shippingRef = new LinkedHashMap<>();
@@ -693,11 +732,60 @@ public class OrderReturnServiceImpl implements OrderReturnService {
         }
     }
 
+    /** Gộp thay đổi `req` lên yêu cầu hiện có `r` (trường null giữ nguyên) - dùng cho sửa và báo giá lại. */
+    private OmsRequestDtos.OrderReturn mergeWithExisting(OrderReturnEntity r, OmsRequestDtos.OrderReturn req) {
+        OmsRequestDtos.OrderReturn merged = new OmsRequestDtos.OrderReturn();
+        merged.setOrderId(String.valueOf(r.getOrderId()));
+        merged.setType(req.getType() != null ? req.getType() : r.getType());
+        merged.setReason(req.getReason() != null ? req.getReason() : r.getReason());
+        List<OrderReturnItemEntity> cur = returnItems.findByReturnId(r.getId());
+        if (req.getReturnItems() != null) {
+            merged.setReturnItems(req.getReturnItems());
+        } else {
+            List<OmsRequestDtos.OrderReturn.ReturnItem> ri = new ArrayList<>();
+            for (OrderReturnItemEntity i : cur) {
+                if (KIND_RETURN.equals(i.getKind())) {
+                    OmsRequestDtos.OrderReturn.ReturnItem x = new OmsRequestDtos.OrderReturn.ReturnItem();
+                    x.setOrderItemId(i.getOrderItemId());
+                    x.setQuantity(i.getQuantity());
+                    ri.add(x);
+                }
+            }
+            merged.setReturnItems(ri);
+        }
+        if (req.getExchangeItems() != null) {
+            merged.setExchangeItems(req.getExchangeItems());
+        } else {
+            List<OmsRequestDtos.OrderReturn.ExchangeItem> ei = new ArrayList<>();
+            for (OrderReturnItemEntity i : cur) {
+                if (KIND_EXCHANGE.equals(i.getKind())) {
+                    OmsRequestDtos.OrderReturn.ExchangeItem x = new OmsRequestDtos.OrderReturn.ExchangeItem();
+                    x.setVariationId(i.getSkuId());
+                    x.setQuantity(i.getQuantity());
+                    ei.add(x);
+                }
+            }
+            merged.setExchangeItems(ei);
+        }
+        return merged;
+    }
+
+    /** Chiếm yêu cầu Pending -> `to` bằng CAS (to == Pending chỉ để khoá dòng). 0 dòng = request khác đã xử lý trước. */
+    private void claim(OrderReturnEntity r, String to, String action) {
+        if (returns.updateStatusIfCurrent(r.getId(), PENDING, to) == 0) {
+            OrderReturnEntity cur = returns.findOne(r.getId());
+            throw conflict("Yêu cầu đã được xử lý bởi thao tác khác, không thể " + action + " (hiện tại: "
+                    + (cur == null ? "?" : cur.getStatus()) + ")", cur == null ? null : cur.getStatus(), action);
+        }
+    }
+
     @Transactional
     @Override
     public Map<String, Object> update(String idOrCode, OmsRequestDtos.OrderReturn req, OrderOmsService.Actor actor) {
         OrderReturnEntity r = find(idOrCode);
         requirePending(r, "sửa");
+        boolean cancelling = req.getStatus() != null && CANCELLED.equalsIgnoreCase(req.getStatus().trim());
+        claim(r, cancelling ? CANCELLED : PENDING, cancelling ? "huỷ" : "sửa");
         if (req.getStatus() != null && !req.getStatus().isBlank()) {
             if (!CANCELLED.equalsIgnoreCase(req.getStatus().trim()) && !PENDING.equalsIgnoreCase(req.getStatus().trim())) {
                 throw bad("Chỉ đổi trạng thái sang Cancelled; dùng approve/reject cho các trạng thái khác");
@@ -705,40 +793,15 @@ public class OrderReturnServiceImpl implements OrderReturnService {
         }
         if (req.getReturnItems() != null || req.getExchangeItems() != null || req.getType() != null
                 || req.getReason() != null) {
-            OmsRequestDtos.OrderReturn merged = new OmsRequestDtos.OrderReturn();
-            merged.setOrderId(String.valueOf(r.getOrderId()));
-            merged.setType(req.getType() != null ? req.getType() : r.getType());
-            merged.setReason(req.getReason() != null ? req.getReason() : r.getReason());
+            OmsRequestDtos.OrderReturn merged = mergeWithExisting(r, req);
             List<OrderReturnItemEntity> cur = returnItems.findByReturnId(r.getId());
-            if (req.getReturnItems() != null) {
-                merged.setReturnItems(req.getReturnItems());
-            } else {
-                List<OmsRequestDtos.OrderReturn.ReturnItem> ri = new ArrayList<>();
-                for (OrderReturnItemEntity i : cur) {
-                    if (KIND_RETURN.equals(i.getKind())) {
-                        OmsRequestDtos.OrderReturn.ReturnItem x = new OmsRequestDtos.OrderReturn.ReturnItem();
-                        x.setOrderItemId(i.getOrderItemId());
-                        x.setQuantity(i.getQuantity());
-                        ri.add(x);
-                    }
-                }
-                merged.setReturnItems(ri);
-            }
-            if (req.getExchangeItems() != null) {
-                merged.setExchangeItems(req.getExchangeItems());
-            } else {
-                List<OmsRequestDtos.OrderReturn.ExchangeItem> ei = new ArrayList<>();
-                for (OrderReturnItemEntity i : cur) {
-                    if (KIND_EXCHANGE.equals(i.getKind())) {
-                        OmsRequestDtos.OrderReturn.ExchangeItem x = new OmsRequestDtos.OrderReturn.ExchangeItem();
-                        x.setVariationId(i.getSkuId());
-                        x.setQuantity(i.getQuantity());
-                        ei.add(x);
-                    }
-                }
-                merged.setExchangeItems(ei);
-            }
             Plan p = plan(merged, r.getId());
+            // Nếu FE gửi kèm báo giá (đã báo giá lại bằng returnId) thì dấu vân tay phải còn khớp, tránh lưu số đã cũ.
+            if (req.getPricingQuote() != null && req.getPricingQuote().get("fingerprint") != null
+                    && !fingerprint(p).equals(String.valueOf(req.getPricingQuote().get("fingerprint")))) {
+                throw BusinessException.conflict("ORDER_RETURN_QUOTE_STALE",
+                        "Báo giá đổi trả đã thay đổi, vui lòng báo giá lại");
+            }
             for (OrderReturnItemEntity i : cur) {
                 returnItems.delete(i);
             }
@@ -775,8 +838,21 @@ public class OrderReturnServiceImpl implements OrderReturnService {
     public Map<String, Object> approve(String idOrCode, String note, OrderOmsService.Actor actor) {
         OrderReturnEntity r = find(idOrCode);
         requirePending(r, "duyệt");
+        // Chiếm TRƯỚC mọi tác dụng phụ: 2 request duyệt song song -> chỉ 1 request qua, request kia nhận 409.
+        // Lỗi giữa chừng -> rollback cả giao dịch (kể cả trạng thái) nên yêu cầu quay lại Pending.
+        claim(r, COMPLETED, "duyệt");
         OrderEntity order = orders.findOne(r.getOrderId());
         List<OrderReturnItemEntity> items = returnItems.findByReturnId(r.getId());
+
+        // Giá đổi phải khớp báo giá đã lưu: số hoàn / chênh lệch (theo exchangeTotal đã lưu) và đơn thay thế (giá hiện tại)
+        // cùng một quy tắc. Lệch -> 409 trước mọi tác dụng phụ (giao dịch rollback, yêu cầu vẫn Pending), admin báo giá lại.
+        if (EXCHANGE.equals(r.getType())) {
+            BigDecimal now = currentExchangeTotal(items);
+            if (now == null || now.compareTo(r.getExchangeTotal()) != 0) {
+                throw BusinessException.conflict("ORDER_RETURN_QUOTE_STALE",
+                        "Giá hàng đổi đã thay đổi so với báo giá (hoặc sản phẩm đổi không còn bán), vui lòng sửa yêu cầu để báo giá lại");
+            }
+        }
 
         // 1. Trả hàng về kho + cập nhật đơn gốc (dùng đúng luồng returnOrder: CAS số lượng, nhập kho, RETURNED khi trả hết).
         AdminOrderReturnRequestDto dto = new AdminOrderReturnRequestDto();
@@ -847,6 +923,7 @@ public class OrderReturnServiceImpl implements OrderReturnService {
         if (note == null || note.isBlank()) {
             throw bad("Cần nhập lý do từ chối");
         }
+        claim(r, REJECTED, "từ chối");
         r.setStatus(REJECTED);
         r.setRejectReason(note.trim());
         r.setResolvedById(actor == null ? null : actor.id());

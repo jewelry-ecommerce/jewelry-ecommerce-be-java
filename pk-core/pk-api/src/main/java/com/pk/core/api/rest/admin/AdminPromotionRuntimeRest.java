@@ -65,7 +65,7 @@ public class AdminPromotionRuntimeRest extends AbstractRest {
         return run(() -> service.validateCode(body), rq, rs);
     }
 
-    @GetMapping(UrlAdminConstant.Promotion.CUSTOMER_BY_PHONE)
+    @GetMapping({UrlAdminConstant.Promotion.CUSTOMER_BY_PHONE, UrlAdminConstant.Promotion.ORDER_CUSTOMER_BY_PHONE})
     public BaseRes customerByPhone(@RequestParam String phone, HttpServletRequest rq, HttpServletResponse rs) {
         return run(() -> service.customerByPhone(phone), rq, rs);
     }

@@ -16,8 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +27,9 @@ public class VoucherServiceImpl implements VoucherService {
 
     private final VoucherRepo vouchers;
 
-    @Transactional(readOnly = true)
+    // noRollbackFor: computeQuote bắt BusinessException để báo REJECTED cho từng mã; nếu không, ngoại lệ đi qua proxy
+    // giao dịch tham gia sẽ đánh dấu giao dịch ngoài rollback-only -> UnexpectedRollbackException (500) khi commit.
+    @Transactional(readOnly = true, noRollbackFor = BusinessException.class)
     @Override
     public VoucherEntity validate(String code, BigDecimal subtotal) {
         VoucherEntity v = vouchers.findByCode(code.trim().toUpperCase(Locale.ROOT));
@@ -54,6 +58,33 @@ public class VoucherServiceImpl implements VoucherService {
                     v.getMinOrderValue(), v.getCode());
         }
         return v;
+    }
+
+    @Transactional(readOnly = true, noRollbackFor = BusinessException.class)
+    @Override
+    public Applied apply(String code, List<Line> lines) {
+        VoucherEntity v = vouchers.findByCode(code == null ? "" : code.trim().toUpperCase(Locale.ROOT));
+        if (v == null || !VoucherEntity.PUBLISHED.equals(v.getStatus())) {
+            throw new ResourceNotFoundException("Voucher", "Voucher", code);
+        }
+        Set<Long> include = new HashSet<>(vouchers.findScopeSkuIds(v.getId(), "INCLUDE"));
+        Set<Long> exclude = new HashSet<>(vouchers.findScopeSkuIds(v.getId(), "EXCLUDE"));
+        boolean scoped = !include.isEmpty() || !exclude.isEmpty();
+        BigDecimal base = BigDecimal.ZERO;
+        int eligible = 0;
+        for (Line l : lines) {
+            boolean ok = (include.isEmpty() || include.contains(l.skuId())) && !exclude.contains(l.skuId());
+            if (ok) {
+                base = base.add(l.net());
+                eligible++;
+            }
+        }
+        if (scoped && eligible == 0) {
+            throw BusinessException.badRequest("VOUCHER_NO_ELIGIBLE_ITEMS",
+                    "Voucher " + v.getCode() + " không áp dụng cho sản phẩm nào trong đơn hàng", v.getCode());
+        }
+        validate(v.getCode(), base); // thời gian, lượt dùng, giá trị tối thiểu (trên phần đủ điều kiện)
+        return new Applied(v, v.computeDiscount(base));
     }
 
     @Transactional

@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -34,6 +35,8 @@ public class BannerPlacementServiceImpl implements BannerPlacementService {
     private final com.pk.core.business.repository.BannerRepo banners;
     private final com.pk.core.business.repository.BannerPlacementLayoutRepo layouts;
     private final com.pk.core.business.repository.BannerPlacementLayoutItemRepo layoutItems;
+    private final com.pk.core.business.repository.CmsBlockRepo cmsBlocks;
+    private final com.pk.core.business.repository.CmsPageRepo cmsPages;
 
     @Transactional(readOnly = true)
     @Override
@@ -112,6 +115,23 @@ public class BannerPlacementServiceImpl implements BannerPlacementService {
         if (used != null && used > 0) {
             throw BusinessException.conflict("PLACEMENT_IN_USE",
                     "Vị trí \"" + e.getName() + "\" còn " + used + " banner đang dùng, hãy chuyển/xoá banner trước", used);
+        }
+        // Block BANNER của trang CMS tham chiếu vị trí qua config.placementCode: xoá vị trí sẽ làm các block này render rỗng.
+        long cmsUsed = cmsBlocks.findAll(Sort.unsorted()).stream()
+                .filter(b -> com.pk.core.model.entity.CmsBlockEntity.BANNER.equals(b.getType()))
+                .filter(b -> {
+                    Map<String, Object> cfg = support.readMap(b.getData());
+                    return cfg != null && e.getCode().equals(String.valueOf(cfg.get("placementCode")));
+                })
+                .filter(b -> {
+                    var page = b.getPageId() == null ? null : cmsPages.findOne(b.getPageId());
+                    return page != null && page.getDeletedDate() == null; // trang đã xoá mềm không còn render
+                })
+                .count();
+        if (cmsUsed > 0) {
+            throw BusinessException.conflict("PLACEMENT_IN_USE_BY_CMS",
+                    "Vị trí \"" + e.getName() + "\" đang được " + cmsUsed + " block banner của trang CMS sử dụng, "
+                            + "hãy đổi/xoá các block đó trước", cmsUsed);
         }
         for (var layout : layouts.findByPlacementId(id)) {
             layoutItems.deleteByLayoutId(layout.getId());

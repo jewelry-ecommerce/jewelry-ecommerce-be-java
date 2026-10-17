@@ -64,7 +64,7 @@ class CartServiceTest {
     void setUp() {
         service = new CartServiceImpl(carts, cartItems, products, productSkus, promotionPricing, preOrder);
         // Mặc định không có khuyến mãi; test riêng ghi đè.
-        lenient().when(promotionPricing.unitDiscount(any(), any())).thenReturn(BigDecimal.ZERO);
+        lenient().when(promotionPricing.unitDiscount(any(), any(), any())).thenReturn(BigDecimal.ZERO);
         // Mặc định mọi sản phẩm cha đang PUBLISHED (SKU chỉ bán được khi sản phẩm cha bán được); test riêng ghi đè.
         lenient().when(products.findOne(anyLong())).thenAnswer(inv -> product(inv.getArgument(0, Long.class), 1L));
     }
@@ -285,7 +285,7 @@ class CartServiceTest {
     @Test
     void calculateTotalAppliesProductPromotionOnTopOfSalePrice() {
         when(productSkus.findOne(1L)).thenReturn(sku(1L, 100L, 10, 1_000_000, 900_000L));
-        when(promotionPricing.unitDiscount(100L, BigDecimal.valueOf(900_000L))).thenReturn(BigDecimal.valueOf(90_000L));
+        when(promotionPricing.unitDiscount(eq(100L), any(), eq(BigDecimal.valueOf(900_000L)))).thenReturn(BigDecimal.valueOf(90_000L));
         CartTotalRequestDto req = new CartTotalRequestDto(List.of(new CartTotalItemRequestDto("1", 2, null)));
 
         CartTotalResponseDto res = service.calculateTotal(req);

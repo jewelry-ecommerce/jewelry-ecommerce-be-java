@@ -202,7 +202,7 @@ public class OrderServiceImpl implements OrderService {
 
     /** Kết quả giữ chỗ tồn kho cho một nhóm dòng hàng. */
     private record LineBuild(List<OrderItemEntity> items, BigDecimal subtotal, BigDecimal productDiscount,
-                             boolean hasPreOrder) {
+                             boolean hasPreOrder, List<VoucherService.Line> voucherLines) {
     }
 
     /** Lõi đặt hàng dùng chung cho khách đăng nhập (userId != null) và khách vãng lai (userId = null). */
@@ -219,6 +219,7 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal productDiscount = BigDecimal.ZERO;
         boolean hasPreOrderLine = false;
+        List<VoucherService.Line> voucherLines = new ArrayList<>();
         for (Map.Entry<Long, Integer> line : qtyBySku.entrySet()) {
             Long skuId = line.getKey();
             int qty = line.getValue();
@@ -249,11 +250,13 @@ public class OrderServiceImpl implements OrderService {
             snap.setSizeLabel(sku.getSizeLabel());
             snap.setMetalColorLabel(sku.getMetalColorLabel());
             itemEntities.add(snap);
+            BigDecimal lineDiscount = promotionPricing.unitDiscount(sku.getProductId(), sku.getId(), unitPrice)
+                    .multiply(BigDecimal.valueOf(qty));
             subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(qty)));
-            productDiscount = productDiscount.add(
-                    promotionPricing.unitDiscount(sku.getProductId(), unitPrice).multiply(BigDecimal.valueOf(qty)));
+            productDiscount = productDiscount.add(lineDiscount);
+            voucherLines.add(new VoucherService.Line(skuId, unitPrice.multiply(BigDecimal.valueOf(qty)).subtract(lineDiscount)));
         }
-        return new LineBuild(itemEntities, subtotal, productDiscount, hasPreOrderLine);
+        return new LineBuild(itemEntities, subtotal, productDiscount, hasPreOrderLine, voucherLines);
     }
 
     private OrderResponseDto placeOrder(Long userId, String guestEmail, String guestCartId, CustomerAddressEntity address,
@@ -278,9 +281,9 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal voucherDiscount = BigDecimal.ZERO;
         String appliedVoucherCode = null;
         if (voucherCode != null && !voucherCode.isBlank()) {
-            BigDecimal payable = subtotal.subtract(productDiscount);
-            voucher = voucherService.validate(voucherCode, payable);
-            voucherDiscount = voucher.computeDiscount(payable);
+            VoucherService.Applied applied = voucherService.apply(voucherCode, built.voucherLines());
+            voucher = applied.voucher();
+            voucherDiscount = applied.discount();
             appliedVoucherCode = voucher.getCode();
         }
 
@@ -831,6 +834,7 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal productDiscount = BigDecimal.ZERO;
         StringBuilder fp = new StringBuilder();
+        List<VoucherService.Line> voucherLines = new ArrayList<>();
         for (Map.Entry<Long, Integer> e : qtyBySku.entrySet()) {
             ProductSkuEntity sku = productSkus.findOne(e.getKey());
             if (!sellable(sku)) {
@@ -842,7 +846,7 @@ public class OrderServiceImpl implements OrderService {
             }
             ProductEntity product = products.findOne(sku.getProductId());
             BigDecimal unit = sku.effectivePrice();
-            BigDecimal unitDiscount = promotionPricing.unitDiscount(sku.getProductId(), unit);
+            BigDecimal unitDiscount = promotionPricing.unitDiscount(sku.getProductId(), sku.getId(), unit);
             BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
             BigDecimal lineDiscount = unitDiscount.multiply(BigDecimal.valueOf(qty));
             Map<String, Object> m = new LinkedHashMap<>();
@@ -861,6 +865,7 @@ public class OrderServiceImpl implements OrderService {
             m.put("lineType", "PRODUCT");
             m.put("pricingMode", "STANDARD");
             lines.add(m);
+            voucherLines.add(new VoucherService.Line(e.getKey(), lineTotal.subtract(lineDiscount)));
             subtotal = subtotal.add(lineTotal);
             productDiscount = productDiscount.add(lineDiscount);
             fp.append(e.getKey()).append(':').append(qty).append(':').append(unit.longValue()).append(':')
@@ -884,8 +889,9 @@ public class OrderServiceImpl implements OrderService {
                     outcome.put("reasonCodes", List.of("ONLY_ONE_VOUCHER_ALLOWED"));
                 } else {
                     try {
-                        VoucherEntity v = voucherService.validate(code, payable);
-                        voucherDiscount = v.computeDiscount(payable);
+                        VoucherService.Applied applied = voucherService.apply(code, voucherLines);
+                        VoucherEntity v = applied.voucher();
+                        voucherDiscount = applied.discount();
                         voucherTaken = true;
                         appliedCodes.add(v.getCode());
                         outcome.put("status", "APPLIED");
@@ -978,6 +984,10 @@ public class OrderServiceImpl implements OrderService {
                     order.getStatus(), order.getStatus());
         }
         requireCod(req.getPaymentMethod());
+        // Khoá dòng đơn bằng CAS trạng thái (UPDATE status = status WHERE status = đã đọc): huỷ/đổi trạng thái chen vào giữa
+        // -> 409; sửa song song được xếp hàng. Đọc lại đơn SAU khi giữ khoá để không ghi đè thay đổi của lần sửa trước.
+        guardTransition(order, order.getStatus());
+        order = adminOrder(code);
         if (req.getReceiverPhone() != null && !req.getReceiverPhone().isBlank()) {
             order.setShipPhone(PhoneUtil.normalize(req.getReceiverPhone().trim()));
         }
@@ -1049,9 +1059,9 @@ public class OrderServiceImpl implements OrderService {
         String voucherCode = order.getAppliedVoucherCode();
         if (voucherCode != null && !voucherCode.isBlank()) {
             voucherService.releaseUsage(voucherCode);
-            BigDecimal payable = built.subtotal().subtract(built.productDiscount());
-            VoucherEntity v = voucherService.validate(voucherCode, payable);
-            voucherDiscount = v.computeDiscount(payable);
+            VoucherService.Applied applied = voucherService.apply(voucherCode, built.voucherLines());
+            VoucherEntity v = applied.voucher();
+            voucherDiscount = applied.discount();
             voucherService.applyUsage(v.getId(), v.getCode());
         }
         order.setSubtotal(built.subtotal());

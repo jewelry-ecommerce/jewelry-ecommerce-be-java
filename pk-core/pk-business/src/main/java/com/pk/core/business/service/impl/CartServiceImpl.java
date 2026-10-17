@@ -181,7 +181,7 @@ public class CartServiceImpl implements CartService {
             subTotal = subTotal.add(sku.getListPrice().multiply(qty));
             productDiscount = productDiscount.add(sku.getListPrice().subtract(sku.effectivePrice()).multiply(qty));
             promotionDiscount = promotionDiscount.add(
-                    promotionPricing.unitDiscount(sku.getProductId(), sku.effectivePrice()).multiply(qty));
+                    promotionPricing.unitDiscount(sku.getProductId(), sku.getId(), sku.effectivePrice()).multiply(qty));
         }
 
         List<CartDiscountResponseDto> discounts = new ArrayList<>();

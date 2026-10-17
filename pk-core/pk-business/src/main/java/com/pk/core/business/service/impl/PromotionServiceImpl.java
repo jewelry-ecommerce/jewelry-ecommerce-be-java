@@ -61,6 +61,7 @@ public class PromotionServiceImpl implements PromotionService {
         // Thay toàn bộ danh sách sản phẩm (xoá hết liên kết cũ rồi ghi lại) thay vì diff thêm/bớt -
         // đơn giản hơn, đủ dùng cho phạm vi đồ án (xem PromotionRepo javadoc).
         promotions.deleteAllByPromotionId(promotionId);
+        promotions.deleteScope(promotionId);
         linkProducts(promotionId, req.getProductIds());
         return toDto(p);
     }

@@ -28,4 +28,16 @@ public interface PromotionRepo extends PkRepo<PromotionEntity, Long> {
      * merge từng phần - đơn giản hơn so với diff thêm/bớt). */
     @Modifying
     int deleteAllByPromotionId(@Param("promotionId") Long promotionId);
+
+    /** Thêm 1 dòng phạm vi SKU (scopeType = INCLUDE | EXCLUDE) - chỉ khuyến mãi sinh từ chiến dịch wizard có dòng này. */
+    @Modifying
+    int addScopeSku(@Param("promotionId") Long promotionId, @Param("scopeType") String scopeType,
+                    @Param("skuId") Long skuId);
+
+    /** Id SKU theo loại phạm vi (INCLUDE | EXCLUDE) của khuyến mãi. */
+    List<Long> findScopeSkuIds(@Param("promotionId") Long promotionId, @Param("scopeType") String scopeType);
+
+    /** Xoá phạm vi SKU (khi sửa danh sách sản phẩm qua API cũ - khuyến mãi quay về mức sản phẩm). */
+    @Modifying
+    int deleteScope(@Param("promotionId") Long promotionId);
 }

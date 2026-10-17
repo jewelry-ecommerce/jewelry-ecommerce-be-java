@@ -69,6 +69,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal productDiscount = BigDecimal.ZERO;
         int itemCount = 0;
+        List<VoucherService.Line> voucherLines = new ArrayList<>();
         for (Map.Entry<Long, Integer> line : qtyBySku.entrySet()) {
             Long skuId = line.getKey();
             int qty = line.getValue();
@@ -91,18 +92,18 @@ public class CheckoutServiceImpl implements CheckoutService {
                     product != null ? product.getName() : sku.getName(),
                     product != null ? product.getThumbnailUrl() : null, qty, unitPrice,
                     unitPrice.multiply(BigDecimal.valueOf(qty))));
+            BigDecimal lineDiscount = promotionPricing.unitDiscount(sku.getProductId(), sku.getId(), unitPrice)
+                    .multiply(BigDecimal.valueOf(qty));
             subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(qty)));
-            productDiscount = productDiscount.add(
-                    promotionPricing.unitDiscount(sku.getProductId(), unitPrice).multiply(BigDecimal.valueOf(qty)));
+            productDiscount = productDiscount.add(lineDiscount);
+            voucherLines.add(new VoucherService.Line(skuId, unitPrice.multiply(BigDecimal.valueOf(qty)).subtract(lineDiscount)));
             itemCount += qty;
         }
 
         BigDecimal voucherDiscount = BigDecimal.ZERO;
         if (voucherCode != null && !voucherCode.isBlank()) {
             // Voucher tính trên phần còn lại sau khi đã trừ khuyến mãi sản phẩm.
-            BigDecimal payable = subtotal.subtract(productDiscount);
-            VoucherEntity voucher = voucherService.validate(voucherCode, payable);
-            voucherDiscount = voucher.computeDiscount(payable);
+            voucherDiscount = voucherService.apply(voucherCode, voucherLines).discount();
         }
 
         // CHƯA có bảng phí ship theo phương thức/khu vực - giống OrderServiceImpl.create, để 0.

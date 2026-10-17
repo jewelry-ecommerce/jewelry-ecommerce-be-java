@@ -96,6 +96,9 @@ public final class OmsRequestDtos {
     public static class OrderReturn {
         /** Id hoặc mã đơn gốc. */
         private String orderId;
+        /** Chỉ dùng khi BÁO GIÁ lại một yêu cầu Pending đang sửa: id/mã yêu cầu; số lượng đang giữ chỗ của chính nó
+         *  không bị tính là đã dùng, trường bỏ trống lấy từ yêu cầu hiện có. */
+        private String returnId;
         /** Refund | Exchange (FE enum). */
         private String type;
         private String reason;
