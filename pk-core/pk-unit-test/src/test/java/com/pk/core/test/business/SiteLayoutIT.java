@@ -65,7 +65,11 @@ class SiteLayoutIT extends IntegrationTestBase {
         mvc.perform(jsonRequest(post(HEADERS), header("B " + t, now.minus(1, ChronoUnit.HOURS), null, "ACTIVE"))
                         .header("Authorization", admin))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.errors[0].code").value("HEADER_SCHEDULE_CONFLICT"));
+                .andExpect(jsonPath("$.errors[0].code").value("HEADER_SCHEDULE_CONFLICT"))
+                .andExpect(jsonPath("$.dependencies[0].id").value(String.valueOf(aId)))
+                .andExpect(jsonPath("$.dependencies[0].bannerName").value("A " + t))
+                .andExpect(jsonPath("$.dependencies[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.dependencies[0].bannerStartTime").exists());
         Map<String, Object> bBody = header("B " + t, now.minus(1, ChronoUnit.HOURS), null, "ACTIVE");
         bBody.put("confirmReplaceActive", true);
         long bId = body(mvc.perform(jsonRequest(post(HEADERS), bBody).header("Authorization", admin))
@@ -144,15 +148,20 @@ class SiteLayoutIT extends IntegrationTestBase {
         assertEquals("Bảo hành", saved.get("menuColumns").get(0).get("items").get(0).get("label").asText());
 
         // Lưu lần hai vẫn cùng một dòng (singleton) và GET trả đúng nội dung.
-        JsonNode again = body(mvc.perform(jsonRequest(put(FOOTER), Map.of("copyrightText", "© 2027", "socialLinks", List.of(), "menuColumns", List.of()))
+        JsonNode again = body(mvc.perform(jsonRequest(put(FOOTER), Map.of("copyrightText", "© 2027", "newsletterHeading", "  Đăng ký nhận tin ", "newsletterSubHeading", "Ưu đãi mới nhất",
+                "socialLinks", List.of(), "menuColumns", List.of()))
                 .header("Authorization", admin)).andExpect(status().isOk()));
         assertEquals(saved.get("id").asLong(), again.get("id").asLong());
         JsonNode read = body(mvc.perform(get(FOOTER).header("Authorization", admin)).andExpect(status().isOk()));
         assertEquals("© 2027", read.get("copyrightText").asText());
         assertEquals(0, read.get("socialLinks").size());
+        assertEquals("Đăng ký nhận tin", read.get("newsletterHeading").asText());
+        assertEquals("Ưu đãi mới nhất", read.get("newsletterSubHeading").asText());
 
         // Công khai thấy footer đã lưu.
-        mvc.perform(get(PUBLIC)).andExpect(status().isOk()).andExpect(jsonPath("$.data.footer.copyrightText").value("© 2027"));
+        mvc.perform(get(PUBLIC)).andExpect(status().isOk()).andExpect(jsonPath("$.data.footer.copyrightText").value("© 2027"))
+                .andExpect(jsonPath("$.data.footer.newsletterHeading").value("Đăng ký nhận tin"))
+                .andExpect(jsonPath("$.data.footer.newsletterSubHeading").value("Ưu đãi mới nhất"));
 
         // Nền tảng sai / thiếu url -> 400.
         mvc.perform(jsonRequest(put(FOOTER), Map.of("socialLinks", List.of(Map.of("platform", "MySpace", "displayName", "x", "url", "https://x"))))

@@ -55,6 +55,16 @@ public class OrderItemEntity extends CreateEntity {
     @Column(name = "returned_quantity")
     private int returnedQuantity;
 
+    /** Snapshot mã SKU + thuộc tính tại thời điểm đặt (đổi SKU sau không ảnh hưởng đơn cũ). */
+    @Column(name = "sku_code")
+    private String skuCode;
+
+    @Column(name = "size_label")
+    private String sizeLabel;
+
+    @Column(name = "metal_color_label")
+    private String metalColorLabel;
+
     public OrderItemEntity(Long orderId, Long productId, Long skuId, String name, String imageUrl,
                             int quantity, BigDecimal unitPrice) {
         this.orderId = orderId;

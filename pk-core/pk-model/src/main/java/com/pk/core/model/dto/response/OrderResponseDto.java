@@ -60,6 +60,10 @@ public class OrderResponseDto extends UpdateDto {
     private Date deliveredAt;
     /** Giá trị thu hộ COD: bằng tổng đơn nếu thanh toán COD, ngược lại 0. */
     private BigDecimal codAmount = BigDecimal.ZERO;
+    /** Id tài khoản tạo đơn (khách đặt online, hoặc nhân viên tạo hộ); null = khách vãng lai / đơn cũ. */
+    private Long createdById;
+    /** WEBSITE | ADMIN. */
+    private String source;
 
     public static OrderResponseDto from(OrderEntity o, Long paymentId, List<OrderItemResponseDto> items,
                                          List<OrderTimelineResponseDto> timeline) {
@@ -69,7 +73,7 @@ public class OrderResponseDto extends UpdateDto {
                 o.getShipAddressLine(), o.getSubtotal(), o.getProductDiscount(), o.getVoucherDiscount(),
                 o.getShippingFee(), o.getGrandTotal(), o.getAppliedVoucherCode(), o.getNote(), o.getPlacedAt(),
                 paymentId, o.getRefundedAmount() == null ? BigDecimal.ZERO : o.getRefundedAmount(), items, timeline,
-                o.getUserId(), o.getGuestEmail(), null, BigDecimal.ZERO);
+                o.getUserId(), o.getGuestEmail(), null, BigDecimal.ZERO, o.getCreatedId(), o.getSource());
         dto.copyAudit(o);
         return dto;
     }
@@ -106,11 +110,11 @@ public class OrderResponseDto extends UpdateDto {
     }
 
     public Map<String, Object> getShippingAddressSnapshot() {
+        // FE chỉ hiển thị firstName -> đặt HỌ TÊN ĐẦY ĐỦ vào firstName, lastName để trống.
         String full = shipRecipientName == null ? "" : shipRecipientName.trim();
-        int i = full.lastIndexOf(' ');
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("lastName", i < 0 ? "" : full.substring(0, i).trim());
-        m.put("firstName", full.substring(i + 1));
+        m.put("lastName", "");
+        m.put("firstName", full);
         m.put("receiverPhone", shipPhone);
         m.put("addressLine", shipAddressLine);
         m.put("wardName", shipWard);

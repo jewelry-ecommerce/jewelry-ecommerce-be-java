@@ -36,6 +36,17 @@ public class ProductRest extends AbstractRest {
     private final ProductService productService;
     private final CategoryService categoryService;
     private final CollectionService collectionService;
+    private final com.pk.core.business.service.SearchPinnedService searchPinnedService;
+
+    /** Sản phẩm đang được ghim ở ô tìm kiếm (landing), theo thứ tự ô. */
+    @GetMapping(UrlConstant.Product.SEARCH_PINNED)
+    public BaseRes searchPinned(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(searchPinnedService.activeLandingProducts());
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
 
     @GetMapping(UrlConstant.Product.BASE)
     public BaseRes search(@RequestParam(required = false) String category,

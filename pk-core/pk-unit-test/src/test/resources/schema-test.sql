@@ -31,6 +31,22 @@ CREATE SEQUENCE order_idempotency_keys_id_seq START WITH 1;
 CREATE SEQUENCE site_headers_id_seq START WITH 1;
 CREATE SEQUENCE site_footer_id_seq START WITH 1;
 CREATE SEQUENCE site_logos_id_seq START WITH 1;
+CREATE SEQUENCE cms_navigations_id_seq START WITH 1;
+CREATE SEQUENCE cms_navigation_badges_id_seq START WITH 1;
+CREATE SEQUENCE cms_navigation_publish_id_seq START WITH 1;
+CREATE SEQUENCE search_pinned_products_id_seq START WITH 1;
+CREATE SEQUENCE product_list_banner_configs_id_seq START WITH 1;
+CREATE SEQUENCE promo_drafts_id_seq START WITH 1;
+CREATE SEQUENCE promo_draft_components_id_seq START WITH 1;
+CREATE SEQUENCE promo_draft_schemas_id_seq START WITH 1;
+CREATE SEQUENCE promo_schema_components_id_seq START WITH 1;
+CREATE SEQUENCE promo_voucher_codes_id_seq START WITH 1;
+CREATE SEQUENCE promo_published_id_seq START WITH 1;
+CREATE SEQUENCE order_notes_id_seq START WITH 1;
+CREATE SEQUENCE order_audit_logs_id_seq START WITH 1;
+CREATE SEQUENCE order_returns_id_seq START WITH 1;
+CREATE SEQUENCE order_return_items_id_seq START WITH 1;
+CREATE SEQUENCE order_return_status_history_id_seq START WITH 1;
 CREATE SEQUENCE brands_id_seq START WITH 1;
 CREATE SEQUENCE seasons_id_seq START WITH 1;
 CREATE SEQUENCE category_attributes_id_seq START WITH 1;
@@ -294,6 +310,7 @@ CREATE TABLE orders (
     stock_fulfilled     BOOLEAN NOT NULL DEFAULT FALSE,
     refunded_amount     NUMERIC(15, 0) NOT NULL DEFAULT 0,
     applied_voucher_code VARCHAR(40),
+    source              VARCHAR(30) NOT NULL DEFAULT 'WEBSITE',
     note                VARCHAR(500),
     placed_at           TIMESTAMP NOT NULL,
     created_id          BIGINT,
@@ -318,6 +335,9 @@ CREATE TABLE order_items (
     unit_price   NUMERIC(15, 0) NOT NULL,
     line_total   NUMERIC(15, 0) NOT NULL,
     returned_quantity INTEGER NOT NULL DEFAULT 0,
+    sku_code     VARCHAR(100),
+    size_label   VARCHAR(100),
+    metal_color_label VARCHAR(100),
     created_id   BIGINT,
     created_date TIMESTAMP NOT NULL,
     CONSTRAINT ck_order_items_quantity CHECK (quantity > 0),
@@ -720,6 +740,7 @@ CREATE TABLE banner_placement_layouts (
     active_from   TIMESTAMP,
     active_to     TIMESTAMP,
     note          VARCHAR(500),
+    revision      INTEGER NOT NULL DEFAULT 1,
     created_id    BIGINT,
     created_date  TIMESTAMP NOT NULL,
     updated_id    BIGINT,
@@ -846,6 +867,8 @@ CREATE TABLE site_footer (
     footer_logo_url          VARCHAR(500),
     certification_image_url  VARCHAR(500),
     certification_url        VARCHAR(500),
+    newsletter_heading       VARCHAR(200),
+    newsletter_sub_heading   VARCHAR(300),
     social_links             TEXT,
     menu_columns             TEXT,
     created_id               BIGINT,
@@ -870,4 +893,240 @@ CREATE TABLE site_logos (
     updated_date     TIMESTAMP,
     deleted_id       BIGINT,
     deleted_date     TIMESTAMP
+);
+
+
+-- ===================== CMS NAVIGATION (V30) =====================
+CREATE TABLE cms_navigations (
+    id                  BIGINT PRIMARY KEY,
+    layer               VARCHAR(10)  NOT NULL DEFAULT 'DRAFT',
+    source_id           BIGINT,
+    parent_id           BIGINT,
+    label               VARCHAR(150) NOT NULL,
+    type                VARCHAR(10)  NOT NULL DEFAULT 'NONE',
+    target_id           VARCHAR(60),
+    url                 VARCHAR(500),
+    query_params        CLOB,
+    icon                VARCHAR(500),
+    image               VARCHAR(500),
+    open_in_new_tab     BOOLEAN      NOT NULL DEFAULT FALSE,
+    sort_order          INTEGER      NOT NULL DEFAULT 0,
+    show_on_menu_popup  BOOLEAN      NOT NULL DEFAULT TRUE,
+    show_on_plp         BOOLEAN      NOT NULL DEFAULT TRUE,
+    is_archived         BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_id          BIGINT,
+    created_date        TIMESTAMP    NOT NULL,
+    updated_id          BIGINT,
+    updated_date        TIMESTAMP
+);
+
+CREATE TABLE cms_navigation_badges (
+    id              BIGINT PRIMARY KEY,
+    layer           VARCHAR(10)  NOT NULL DEFAULT 'DRAFT',
+    source_id       BIGINT,
+    navigation_id   BIGINT       NOT NULL,
+    design_type     VARCHAR(10)  NOT NULL,
+    display_text    VARCHAR(20),
+    image_url       VARCHAR(500),
+    style_config    CLOB,
+    start_time      TIMESTAMP    NOT NULL,
+    end_time        TIMESTAMP,
+    created_id      BIGINT,
+    created_date    TIMESTAMP    NOT NULL,
+    updated_id      BIGINT,
+    updated_date    TIMESTAMP
+);
+
+CREATE TABLE cms_navigation_publish (
+    id                  BIGINT PRIMARY KEY,
+    fingerprint         VARCHAR(64),
+    published_date      TIMESTAMP,
+    created_id          BIGINT,
+    created_date        TIMESTAMP NOT NULL,
+    updated_id          BIGINT,
+    updated_date        TIMESTAMP
+);
+
+-- ===================== SEARCH PINNED (V31) =====================
+CREATE TABLE search_pinned_products (
+    id               BIGINT PRIMARY KEY,
+    keyword_pattern  VARCHAR(200),
+    product_id       BIGINT NOT NULL,
+    position         INTEGER NOT NULL DEFAULT 0,
+    start_date       TIMESTAMP,
+    end_date         TIMESTAMP,
+    is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+    created_id       BIGINT,
+    created_date     TIMESTAMP NOT NULL,
+    updated_id       BIGINT,
+    updated_date     TIMESTAMP
+);
+
+-- ===================== PRODUCT LIST BANNER CONFIGS (V32) =====================
+CREATE TABLE product_list_banner_configs (
+    id                   BIGINT PRIMARY KEY,
+    condition_type       VARCHAR(20)  NOT NULL,
+    target_id            VARCHAR(60),
+    target_slug          VARCHAR(200) NOT NULL,
+    target_name          VARCHAR(200),
+    category_path_slugs  CLOB,
+    is_active            BOOLEAN NOT NULL DEFAULT TRUE,
+    banners              CLOB,
+    created_id           BIGINT,
+    created_date         TIMESTAMP NOT NULL,
+    updated_id           BIGINT,
+    updated_date         TIMESTAMP
+);
+
+-- ===================== PROMOTION CAMPAIGNS (V33) =====================
+CREATE TABLE promo_drafts (
+    id BIGINT PRIMARY KEY, name VARCHAR(200) NOT NULL, description CLOB, starts_at TIMESTAMP NOT NULL, ends_at TIMESTAMP NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'EDITING', published_id BIGINT,
+    created_id           BIGINT,
+    created_date         TIMESTAMP NOT NULL,
+    updated_id           BIGINT,
+    updated_date         TIMESTAMP
+);
+CREATE TABLE promo_draft_components (
+    id BIGINT PRIMARY KEY, draft_id BIGINT NOT NULL, kind VARCHAR(20) NOT NULL, config CLOB NOT NULL, sort_order INT NOT NULL DEFAULT 0,
+    created_id           BIGINT,
+    created_date         TIMESTAMP NOT NULL,
+    updated_id           BIGINT,
+    updated_date         TIMESTAMP
+);
+CREATE UNIQUE INDEX uq_promo_draft_components ON promo_draft_components (draft_id, kind);
+CREATE TABLE promo_draft_schemas (
+    id BIGINT PRIMARY KEY, draft_id BIGINT NOT NULL, sort_order INT NOT NULL DEFAULT 0, name VARCHAR(200) NOT NULL, description CLOB,
+    scope VARCHAR(20) NOT NULL, schema_type VARCHAR(20) NOT NULL, cost_sources VARCHAR(100), priority INT NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'ENABLED', condition_mode VARCHAR(20) NOT NULL DEFAULT 'EXPLICIT',
+    schema_starts_at TIMESTAMP, schema_ends_at TIMESTAMP, unpublished_at TIMESTAMP, legacy_promotion_id BIGINT,
+    created_id           BIGINT,
+    created_date         TIMESTAMP NOT NULL,
+    updated_id           BIGINT,
+    updated_date         TIMESTAMP
+);
+CREATE TABLE promo_schema_components (
+    id BIGINT PRIMARY KEY, schema_id BIGINT NOT NULL, kind VARCHAR(20) NOT NULL, config CLOB NOT NULL, authoring_values CLOB, sort_order INT NOT NULL DEFAULT 0,
+    created_id           BIGINT,
+    created_date         TIMESTAMP NOT NULL,
+    updated_id           BIGINT,
+    updated_date         TIMESTAMP
+);
+CREATE UNIQUE INDEX uq_promo_schema_components ON promo_schema_components (schema_id, kind);
+CREATE TABLE promo_voucher_codes (
+    id BIGINT PRIMARY KEY, schema_id BIGINT NOT NULL, code VARCHAR(64) NOT NULL, normalized_code VARCHAR(64) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', image_url VARCHAR(500),
+    issuance_starts_at TIMESTAMP, issuance_ends_at TIMESTAMP, usage_starts_at TIMESTAMP, usage_ends_at TIMESTAMP,
+    policy CLOB, legacy_voucher_id BIGINT,
+    created_id           BIGINT,
+    created_date         TIMESTAMP NOT NULL,
+    updated_id           BIGINT,
+    updated_date         TIMESTAMP
+);
+CREATE UNIQUE INDEX uq_promo_voucher_codes_schema ON promo_voucher_codes (schema_id);
+CREATE UNIQUE INDEX uq_promo_voucher_codes_code ON promo_voucher_codes (normalized_code);
+CREATE TABLE promo_published (
+    id BIGINT PRIMARY KEY, draft_id BIGINT NOT NULL, name VARCHAR(200) NOT NULL, description CLOB, status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    starts_at TIMESTAMP NOT NULL, ends_at TIMESTAMP NOT NULL, published_at TIMESTAMP NOT NULL, ended_at TIMESTAMP,
+    created_id           BIGINT,
+    created_date         TIMESTAMP NOT NULL,
+    updated_id           BIGINT,
+    updated_date         TIMESTAMP
+);
+CREATE UNIQUE INDEX uq_promo_published_draft ON promo_published (draft_id);
+
+-- V34 OMS
+CREATE TABLE order_notes (
+    id            BIGINT PRIMARY KEY,
+    order_id      BIGINT NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
+    type          VARCHAR(20) NOT NULL,
+    content       VARCHAR(2000) NOT NULL,
+    author_id     BIGINT,
+    author_type   VARCHAR(30),
+    author_name   VARCHAR(150),
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL
+);
+
+CREATE TABLE order_audit_logs (
+    id            BIGINT PRIMARY KEY,
+    order_id      BIGINT NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
+    entity_name   VARCHAR(30) NOT NULL DEFAULT 'oms',
+    action        VARCHAR(60) NOT NULL,
+    action_type   VARCHAR(30),
+    source        VARCHAR(30),
+    message       VARCHAR(500),
+    note          VARCHAR(1000),
+    actor_id      BIGINT,
+    actor_name    VARCHAR(150),
+    actor_role    VARCHAR(60),
+    changes       CLOB,
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL
+);
+
+CREATE TABLE order_returns (
+    id            BIGINT PRIMARY KEY,
+    code          VARCHAR(40) NOT NULL,
+    order_id      BIGINT NOT NULL REFERENCES orders (id),
+    type          VARCHAR(20) NOT NULL,
+    reason        VARCHAR(40) NOT NULL,
+    reason_category VARCHAR(20),
+    status        VARCHAR(20) NOT NULL DEFAULT 'Pending',
+    note          VARCHAR(1000),
+    return_total  NUMERIC(15, 0) NOT NULL DEFAULT 0,
+    exchange_total NUMERIC(15, 0) NOT NULL DEFAULT 0,
+    price_difference NUMERIC(15, 0) NOT NULL DEFAULT 0,
+    total_refund_amount NUMERIC(15, 0) NOT NULL DEFAULT 0,
+    return_fault_party VARCHAR(20),
+    payment_method VARCHAR(30),
+    tracking_code VARCHAR(60),
+    evidence_urls CLOB,
+    shipping_address CLOB,
+    refund_bank_holder VARCHAR(120),
+    refund_bank_number VARCHAR(60),
+    refund_bank_name VARCHAR(120),
+    refund_bank_branch VARCHAR(120),
+    exchange_order_id BIGINT,
+    resolved_by_id BIGINT,
+    resolved_by_name VARCHAR(150),
+    resolved_at   TIMESTAMP,
+    resolved_note VARCHAR(1000),
+    reject_reason VARCHAR(1000),
+    source        VARCHAR(30) NOT NULL DEFAULT 'ADMIN',
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL,
+    updated_id    BIGINT,
+    updated_date  TIMESTAMP
+);
+CREATE UNIQUE INDEX uq_order_returns_code ON order_returns (code);
+
+CREATE TABLE order_return_items (
+    id            BIGINT PRIMARY KEY,
+    return_id     BIGINT NOT NULL REFERENCES order_returns (id) ON DELETE CASCADE,
+    kind          VARCHAR(10) NOT NULL,
+    order_item_id BIGINT,
+    sku_id        BIGINT NOT NULL,
+    product_id    BIGINT,
+    product_name  VARCHAR(200),
+    variation_name VARCHAR(200),
+    sku_code      VARCHAR(60),
+    image_url     VARCHAR(500),
+    unit_price    NUMERIC(15, 0) NOT NULL DEFAULT 0,
+    quantity      INTEGER NOT NULL,
+    line_total    NUMERIC(15, 0) NOT NULL DEFAULT 0,
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL
+);
+
+CREATE TABLE order_return_status_history (
+    id            BIGINT PRIMARY KEY,
+    return_id     BIGINT NOT NULL REFERENCES order_returns (id) ON DELETE CASCADE,
+    from_status   VARCHAR(20),
+    to_status     VARCHAR(20) NOT NULL,
+    changed_by_id BIGINT,
+    changed_by_type VARCHAR(20),
+    note          VARCHAR(1000),
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL
 );

@@ -121,6 +121,17 @@ public class ProductServiceImpl implements ProductService {
 
     @Transactional(readOnly = true)
     @Override
+    public ProductResponseDto findPublishedById(Long productId) {
+        ProductEntity p = productId == null ? null : products.findOne(productId);
+        if (p == null || p.getDeletedDate() != null || !p.isPublished()
+                || !new CategoryScope(categories.findAll(org.springframework.data.domain.Sort.unsorted())).visible(p.getCategoryId())) {
+            return null;
+        }
+        return toDto(p);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
     public PageResponse<ProductResponseDto> search(String categorySlug, String collectionSlug, String keyword,
                                                      String material, BigDecimal minPrice, BigDecimal maxPrice,
                                                      String sort, int page, int take) {
@@ -367,7 +378,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public PageResponse<ProductResponseDto> searchForAdmin(AdminProductQuery q) {
         List<ProductResponseDto> dtos = adminMatch(q).stream()
-                .sorted(Comparator.comparing(ProductEntity::getId).reversed())
+                .sorted(adminComparator(q))
                 .map(this::toAdminDto)
                 .toList();
         return PageResponse.paginate(dtos, q.page(), q.take());
@@ -394,6 +405,31 @@ public class ProductServiceImpl implements ProductService {
         counts.setApprovalRejected(byApproval.getOrDefault(ProductApprovalRequestEntity.REJECTED, 0L));
         counts.setApprovalCancelled(byApproval.getOrDefault(ProductApprovalRequestEntity.CANCELLED, 0L));
         return counts;
+    }
+
+    /** orderBy=createdAt|updatedAt (+orderType ASC|DESC, mặc định DESC); không truyền = id giảm dần. */
+    private static Comparator<ProductEntity> adminComparator(AdminProductQuery q) {
+        String by = nullToEmpty(q.orderBy()).trim();
+        if (by.isEmpty()) {
+            return Comparator.comparing(ProductEntity::getId).reversed();
+        }
+        String type = nullToEmpty(q.orderType()).trim().toUpperCase();
+        if (!type.isEmpty() && !"ASC".equals(type) && !"DESC".equals(type)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "orderType không hợp lệ: " + q.orderType() + " (ASC | DESC)");
+        }
+        java.util.function.Function<ProductEntity, java.util.Date> key;
+        if ("createdAt".equalsIgnoreCase(by)) {
+            key = ProductEntity::getCreatedDate;
+        } else if ("updatedAt".equalsIgnoreCase(by)) {
+            key = p -> p.getUpdatedDate() != null ? p.getUpdatedDate() : p.getCreatedDate();
+        } else {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "orderBy không hợp lệ: " + q.orderBy() + " (createdAt | updatedAt)");
+        }
+        Comparator<ProductEntity> cmp = Comparator.comparing(key, Comparator.nullsFirst(Comparator.naturalOrder()));
+        if (!"ASC".equals(type)) {
+            cmp = cmp.reversed();
+        }
+        return cmp.thenComparing(ProductEntity::getId, Comparator.reverseOrder());
     }
 
     private static final java.time.ZoneId ZONE = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
@@ -446,6 +482,9 @@ public class ProductServiceImpl implements ProductService {
                 continue;
             }
             if (q.maxPrice() != null && (p.getBasePrice() == null || p.getBasePrice().compareTo(q.maxPrice()) > 0)) {
+                continue;
+            }
+            if (q.createdById() != null && !q.createdById().equals(p.getCreatedId())) {
                 continue;
             }
             if (q.brandId() != null && !q.brandId().equals(p.getBrandId())) {
@@ -545,7 +584,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Transactional
     @Override
-    public ProductResponseDto create(AdminCreateProductRequestDto req) {
+    public ProductResponseDto create(AdminCreateProductRequestDto req, Long actorId) {
         if (products.findByCode(req.getCode().trim()) != null) {
             throw BusinessException.conflict(ErrorCode.DUPLICATE_CODE,
                     "Mã sản phẩm đã tồn tại: " + req.getCode(), req.getCode());
@@ -570,6 +609,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         ProductEntity p = new ProductEntity(req.getCategoryId(), req.getCode().trim(), req.getName().trim(), slug);
+        p.setCreatedId(actorId);
         p.setShortDescription(req.getShortDescription());
         p.setDescription(req.getDescription());
         p.setMaterial(req.getMaterial());
@@ -722,6 +762,7 @@ public class ProductServiceImpl implements ProductService {
         ProductResponseDto dto = ProductResponseDto.from(p, category != null ? category.getName() : null, priceFrom,
                 skus, productCollections);
         dto.setCategorySlug(category != null ? category.getSlug() : null);
+        dto.setCreatedById(p.getCreatedId());
         if (p.getBrandId() != null) {
             BrandEntity brand = brandRepo.findOne(p.getBrandId());
             dto.setBrandId(p.getBrandId());

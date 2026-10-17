@@ -29,6 +29,12 @@ public class AdminSiteFooterRequestDto {
     @Size(max = 500)
     private String certificationUrl;
 
+    @Size(max = 200)
+    private String newsletterHeading;
+
+    @Size(max = 300)
+    private String newsletterSubHeading;
+
     @Valid
     @Size(max = 10)
     private List<SocialLink> socialLinks = new ArrayList<>();

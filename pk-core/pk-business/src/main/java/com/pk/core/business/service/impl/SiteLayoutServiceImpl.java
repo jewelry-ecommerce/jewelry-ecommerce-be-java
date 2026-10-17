@@ -199,8 +199,18 @@ public class SiteLayoutServiceImpl implements SiteLayoutService {
                     .map(c -> c.getBannerName() + " (id " + c.getId() + ", " + iso(c.getStartTime()) + " → "
                             + (c.getEndTime() == null ? "không hết hạn" : iso(c.getEndTime())) + ")")
                     .collect(Collectors.joining("; "));
+            List<java.util.Map<String, Object>> deps = conflicts.stream().map(c -> {
+                java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("id", String.valueOf(c.getId()));
+                m.put("bannerName", c.getBannerName());
+                m.put("status", effective(c));
+                m.put("bannerStartTime", iso(c.getStartTime()));
+                m.put("bannerEndTime", c.getEndTime() == null ? null : iso(c.getEndTime()));
+                return m;
+            }).collect(Collectors.toList());
             throw BusinessException.conflict("HEADER_SCHEDULE_CONFLICT",
-                    "Trùng lịch với header khác: " + names + ". Gửi confirmReplaceActive=true để thay thế (các header đó sẽ chuyển DEACTIVE).");
+                    "Trùng lịch với header khác: " + names + ". Gửi confirmReplaceActive=true để thay thế (các header đó sẽ chuyển DEACTIVE).")
+                    .withDependencies(deps);
         }
         for (SiteHeaderEntity c : conflicts) {
             c.setStatus(SiteHeaderEntity.DEACTIVE);
@@ -255,7 +265,7 @@ public class SiteLayoutServiceImpl implements SiteLayoutService {
     @Override
     public Footer footer() {
         SiteFooterEntity f = currentFooter();
-        return f == null ? new Footer(null, null, null, null, null, List.of(), List.of(), null) : toDto(f);
+        return f == null ? new Footer(null, null, null, null, null, null, null, List.of(), List.of(), null) : toDto(f);
     }
 
     @Transactional
@@ -287,6 +297,8 @@ public class SiteLayoutServiceImpl implements SiteLayoutService {
         f.setFooterLogoUrl(req.getFooterLogoUrl());
         f.setCertificationImageUrl(req.getCertificationImageUrl());
         f.setCertificationUrl(req.getCertificationUrl());
+        f.setNewsletterHeading(blank(req.getNewsletterHeading()) ? null : req.getNewsletterHeading().trim());
+        f.setNewsletterSubHeading(blank(req.getNewsletterSubHeading()) ? null : req.getNewsletterSubHeading().trim());
         f.setSocialLinks(write(social));
         f.setMenuColumns(write(columns));
         if (created) {
@@ -305,7 +317,7 @@ public class SiteLayoutServiceImpl implements SiteLayoutService {
 
     private Footer toDto(SiteFooterEntity f) {
         return new Footer(f.getId(), f.getCopyrightText(), f.getFooterLogoUrl(), f.getCertificationImageUrl(),
-                f.getCertificationUrl(), read(f.getSocialLinks(), SOCIAL_LIST), read(f.getMenuColumns(), COLUMN_LIST),
+                f.getCertificationUrl(), f.getNewsletterHeading(), f.getNewsletterSubHeading(), read(f.getSocialLinks(), SOCIAL_LIST), read(f.getMenuColumns(), COLUMN_LIST),
                 iso(f.getUpdatedDate() != null ? f.getUpdatedDate() : f.getCreatedDate()));
     }
 

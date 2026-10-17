@@ -8,13 +8,34 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 
 | Method | Path | Auth | Query | Body | Header |
 |---|---|---|---|---|---|
-| GET | `/admin/orders` | ADMIN, ORDER_MANAGER | `search`?, `status`?, `paymentStatus`?, `fromDate`?, `toDate`?, `dateField`?, `skuCode`?, `shippingMethod`?, `provinceName`?, `source`?, `orderBy`?, `orderType`?, `page`? =1, `take`? =20 |  |  |
-| GET | `/admin/orders/counts` | ADMIN, ORDER_MANAGER | `search`?, `paymentStatus`?, `fromDate`?, `toDate`?, `dateField`?, `skuCode`?, `shippingMethod`?, `provinceName`?, `source`? |  |  |
+| GET | `/admin/orders` | ADMIN, ORDER_MANAGER | `search`?, `status`?, `paymentStatus`?, `fromDate`?, `toDate`?, `dateField`?, `skuCode`?, `shippingMethod`?, `provinceName`?, `source`?, `orderBy`?, `orderType`?, `createdById`?, `page`? =1, `take`? =20 |  |  |
+| GET | `/admin/orders/counts` | ADMIN, ORDER_MANAGER | `search`?, `paymentStatus`?, `fromDate`?, `toDate`?, `dateField`?, `skuCode`?, `shippingMethod`?, `provinceName`?, `source`?, `createdById`? |  |  |
 | GET | `/admin/orders/{orderCode}` | ADMIN, ORDER_MANAGER |  |  |  |
 | PATCH | `/admin/orders/{orderCode}/status` | ADMIN, ORDER_MANAGER |  | `AdminOrderStatusRequestDto` |  |
 | POST | `/admin/orders/{orderCode}/cancel` | ADMIN, ORDER_MANAGER |  | `CancelOrderRequestDto` |  |
 | POST | `/admin/orders/{orderCode}/return` | ADMIN, ORDER_MANAGER |  | `AdminOrderReturnRequestDto` |  |
 | POST | `/admin/orders/{orderCode}/refund` | ADMIN, ORDER_MANAGER |  | `AdminOrderRefundRequestDto` |  |
+| GET | `/admin/orders/audit-logs` | ADMIN, ORDER_MANAGER | `entityName`?, `entityId`, `page`? =1, `take`? =20 |  |  |
+| POST | `/admin/orders/pricing-context/quote` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.OrderUpsert` |  |
+| POST | `/admin/orders` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.OrderUpsert` |  |
+| POST | `/admin/orders/duplicate` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.Duplicate` |  |
+| PUT | `/admin/orders/{orderCode}` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.OrderUpsert` |  |
+| PUT | `/admin/orders/{orderCode}/confirm-payment` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.ConfirmPayment` |  |
+| GET | `/admin/orders/{orderCode}/notes` | ADMIN, ORDER_MANAGER | `type`? |  |  |
+| POST | `/admin/orders/{orderCode}/notes` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.Note` |  |
+
+### Endpoint — `AdminOrderReturnRest`
+
+| Method | Path | Auth | Query | Body | Header |
+|---|---|---|---|---|---|
+| POST | `/admin/order-returns/quote` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.OrderReturn` |  |
+| POST | `/admin/order-returns/commit` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.OrderReturn` |  |
+| POST | `/admin/order-returns` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.OrderReturn` |  |
+| POST | `/admin/order-returns/list` | ADMIN, ORDER_MANAGER |  | `Map<String, Object>` |  |
+| GET | `/admin/order-returns/{id}` | ADMIN, ORDER_MANAGER |  |  |  |
+| PUT | `/admin/order-returns/{id}` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.OrderReturn` |  |
+| PUT | `/admin/order-returns/{id}/approve` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.Resolve` |  |
+| PUT | `/admin/order-returns/{id}/reject` | ADMIN, ORDER_MANAGER |  | `OmsRequestDtos.Resolve` |  |
 
 ### Endpoint — `OrderRest`
 
@@ -141,6 +162,8 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `contactEmail` | `String` |  |
 | `deliveredAt` | `Date` |  |
 | `codAmount` | `BigDecimal` |  |
+| `createdById` | `Long` |  |
+| `source` | `String` |  |
 
 **OrderItemResponseDto**
 
@@ -155,6 +178,9 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `unitPrice` | `BigDecimal` |  |
 | `lineTotal` | `BigDecimal` |  |
 | `returnedQuantity` | `int` |  |
+| `skuCode` | `String` |  |
+| `sizeLabel` | `String` |  |
+| `metalColorLabel` | `String` |  |
 
 **OrderTimelineResponseDto**
 
@@ -164,6 +190,112 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `occurredAt` | `Date` |  |
 | `note` | `String` |  |
 | `actor` | `String` |  |
+
+**OmsRequestDtos**
+
+`class OrderUpsert`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `contextVersion` | `Integer` |  |
+| `receiverPhone` | `String` |  |
+| `firstName` | `String` |  |
+| `lastName` | `String` |  |
+| `provinceCode` | `Long` |  |
+| `provinceName` | `String` |  |
+| `wardCode` | `Long` |  |
+| `wardName` | `String` |  |
+| `districtName` | `String` |  |
+| `addressLine` | `String` |  |
+| `items` | `List<Item>` |  |
+| `couponCodes` | `List<String>` |  |
+| `shippingMethod` | `String` |  |
+| `paymentMethod` | `String` |  |
+| `pricingEvaluationId` | `String` |  |
+| `expectedGrandTotalMinor` | `Long` |  |
+| `idempotencyKey` | `String` |  |
+| `note` | `String` |  |
+| `notePayment` | `String` |  |
+| `contactEmail` | `String` |  |
+| `source` | `String` |  |
+| `purpose` | `String` |  |
+| `orderKind` | `String` |  |
+
+`class Item`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `variationId` | `Long` |  |
+| `skuId` | `Long` |  |
+| `quantity` | `Integer` |  |
+
+`class Note`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `content` | `String` |  |
+| `type` | `String` |  |
+
+`class Duplicate`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `sourceOrderId` | `String` |  |
+| `replaceSourceAfterDuplicate` | `Boolean` |  |
+| `cancellationReason` | `String` |  |
+| `cancellationNote` | `String` |  |
+
+`class ConfirmPayment`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `note` | `String` |  |
+
+`class OrderReturn`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `orderId` | `String` |  |
+| `type` | `String` |  |
+| `reason` | `String` |  |
+| `note` | `String` |  |
+| `status` | `String` |  |
+| `paymentMethod` | `String` |  |
+| `trackingCode` | `String` |  |
+| `returnFaultParty` | `String` |  |
+| `returnItems` | `List<ReturnItem>` |  |
+| `exchangeItems` | `List<ExchangeItem>` |  |
+| `shippingAddress` | `Map<String, Object>` |  |
+| `evidenceImageUrls` | `List<String>` |  |
+| `refundBankAccountHolder` | `String` |  |
+| `refundBankAccountNumber` | `String` |  |
+| `refundBankName` | `String` |  |
+| `refundBankBranch` | `String` |  |
+| `bankAccountHolder` | `String` |  |
+| `bankAccountNumber` | `String` |  |
+| `bankName` | `String` |  |
+| `bankBranch` | `String` |  |
+| `pricingQuote` | `Map<String, Object>` |  |
+
+`class ReturnItem`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `orderItemId` | `Long` |  |
+| `quantity` | `Integer` |  |
+
+`class ExchangeItem`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `variationId` | `Long` |  |
+| `quantity` | `Integer` |  |
+
+`class Resolve`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `note` | `String` |  |
 
 ## Tồn kho
 
@@ -205,8 +337,8 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 
 | Method | Path | Auth | Query | Body | Header |
 |---|---|---|---|---|---|
-| GET | `/admin/catalog/products` | ADMIN, CATALOG_MANAGER | `search`?, `status`?, `categorySlug`?, `collectionSlug`?, `minPrice`?, `maxPrice`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `createdFrom`?, `createdTo`?, `updatedFrom`?, `updatedTo`?, `hasPendingApproval`?, `approvalStatus`?, `stockStatus`?, `brandId`?, `seasonId`?, `seasonUuid`?, `page`? =1, `take`? =20 |  |  |
-| GET | `/admin/catalog/products/counts` | ADMIN, CATALOG_MANAGER | `search`?, `categorySlug`?, `collectionSlug`?, `minPrice`?, `maxPrice`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `createdFrom`?, `createdTo`?, `updatedFrom`?, `updatedTo`?, `stockStatus`?, `brandId`?, `seasonId`?, `seasonUuid`? |  |  |
+| GET | `/admin/catalog/products` | ADMIN, CATALOG_MANAGER | `search`?, `status`?, `categorySlug`?, `collectionSlug`?, `minPrice`?, `maxPrice`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `createdFrom`?, `createdTo`?, `updatedFrom`?, `updatedTo`?, `hasPendingApproval`?, `approvalStatus`?, `stockStatus`?, `brandId`?, `seasonId`?, `seasonUuid`?, `orderBy`?, `orderType`?, `createdById`?, `page`? =1, `take`? =20 |  |  |
+| GET | `/admin/catalog/products/counts` | ADMIN, CATALOG_MANAGER | `search`?, `categorySlug`?, `collectionSlug`?, `minPrice`?, `maxPrice`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `createdFrom`?, `createdTo`?, `updatedFrom`?, `updatedTo`?, `stockStatus`?, `brandId`?, `seasonId`?, `seasonUuid`?, `createdById`? |  |  |
 | POST | `/admin/catalog/products` | ADMIN, CATALOG_MANAGER |  | `AdminCreateProductRequestDto` |  |
 | GET | `/admin/catalog/products/{productId}` | ADMIN, CATALOG_MANAGER |  |  |  |
 | PUT | `/admin/catalog/products/{productId}` | ADMIN, CATALOG_MANAGER |  | `AdminUpdateProductRequestDto` |  |
@@ -218,7 +350,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | PATCH | `/admin/catalog/products/{productId}/unpublish` | ADMIN, CATALOG_MANAGER |  |  |  |
 | POST | `/admin/catalog/products/{productId}/variants` | ADMIN, CATALOG_MANAGER |  | `AdminSkuRequestDto` |  |
 | PUT | `/admin/catalog/products/{productId}/variants/{skuId}` | ADMIN, CATALOG_MANAGER |  | `AdminSkuRequestDto` |  |
-| POST | `/admin/catalog/upload` | ADMIN, CATALOG_MANAGER |  | `multipart/form-data` |  |
+| POST | `/admin/catalog/upload` | ADMIN, CATALOG_MANAGER |  | `multipart: file` |  |
 | GET | `/admin/catalog/products/{productId}/media` | ADMIN, CATALOG_MANAGER |  |  |  |
 | POST | `/admin/catalog/products/{productId}/media` | ADMIN, CATALOG_MANAGER |  | `AdminProductMediaRequestDto` |  |
 | PUT | `/admin/catalog/products/{productId}/media/{mediaId}` | ADMIN, CATALOG_MANAGER |  | `AdminProductMediaRequestDto` |  |
@@ -255,6 +387,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 
 | Method | Path | Auth | Query | Body | Header |
 |---|---|---|---|---|---|
+| GET | `/storefront/product/search-pinned` | Public |  |  |  |
 | GET | `/storefront/product` | Public | `category`?, `collection`?, `search`?, `material`?, `minPrice`?, `maxPrice`?, `categorySlugs`?, `attributes`?, `inStock`?, `sort`? =NEWEST, `page`? =1, `take`? =20 |  |  |
 | GET | `/storefront/product/filters` | Public | `category`?, `categorySlugs`?, `collection`?, `search`?, `minPrice`?, `maxPrice`?, `inStock`? |  |  |
 | GET | `/storefront/product/categories` | Public |  |  |  |
@@ -456,6 +589,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `collections` | `List<CollectionResponseDto>` |  |
 | `publishedAt` | `Date` |  |
 | `categorySlug` | `String` |  |
+| `createdById` | `Long` |  |
 | `brandId` | `Long` |  |
 | `brandName` | `String` |  |
 | `brandCode` | `String` |  |
@@ -623,6 +757,11 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | GET | `/admin/banner/placements` | ADMIN, CATALOG_MANAGER |  |  |  |
 | POST | `/admin/banner/placements` | ADMIN, CATALOG_MANAGER |  | `AdminBannerPlacementRequestDto` |  |
 | PATCH | `/admin/banner/placements/{id}` | ADMIN, CATALOG_MANAGER |  | `AdminBannerPlacementRequestDto` |  |
+| GET | `/admin/banner/product-list-configs` | ADMIN, CATALOG_MANAGER | `conditionType`? |  |  |
+| POST | `/admin/banner/product-list-configs` | ADMIN, CATALOG_MANAGER |  | `AdminProductListBannerConfigRequestDto` |  |
+| PATCH | `/admin/banner/product-list-configs/{id}` | ADMIN, CATALOG_MANAGER |  | `AdminProductListBannerConfigRequestDto` |  |
+| DELETE | `/admin/banner/product-list-configs/{id}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| DELETE | `/admin/banner/placements/{id}` | ADMIN, CATALOG_MANAGER |  |  |  |
 | GET | `/admin/banner/placements/{id}/layouts` | ADMIN, CATALOG_MANAGER |  |  |  |
 | GET | `/admin/banner/placements/{id}/layouts/{layoutId}` | ADMIN, CATALOG_MANAGER |  |  |  |
 | POST | `/admin/banner/placements/{id}/layouts` | ADMIN, CATALOG_MANAGER |  | `AdminBannerLayoutRequestDto` |  |
@@ -634,6 +773,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 
 | Method | Path | Auth | Query | Body | Header |
 |---|---|---|---|---|---|
+| GET | `/storefront/banner/product-list` | Public | `conditionType`, `targetSlug` |  |  |
 | GET | `/storefront/banner/placements/code/{code}/render` | Public | `platform`? |  |  |
 
 ### DTO
@@ -750,6 +890,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `activeFrom` | `Date` |  |
 | `activeTo` | `Date` |  |
 | `note` | `String` |  |
+| `revision` | `int` |  |
 | `createdDate` | `Date` |  |
 | `updatedDate` | `Date` |  |
 | `items` | `List<BannerLayoutItemResponseDto>` |  |
@@ -778,6 +919,79 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `platform` | `String` |  |
 | `settings` | `Map<String, Object>` |  |
 | `layoutSlots` | `List<Map<String, Object>>` |  |
+
+**AdminProductListBannerConfigRequestDto**
+
+`class AdminProductListBannerConfigRequestDto`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `conditionType` | `String` |  |
+| `targetId` | `String` |  |
+| `targetSlug` | `String` |  |
+| `targetName` | `String` |  |
+| `categoryPathSlugs` | `List<String>` |  |
+| `isActive` | `Boolean` |  |
+| `banners` | `List<Banner>` |  |
+
+`class Banner`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `String` |  |
+| `enabled` | `Boolean` |  |
+| `imageUrl` | `String` |  |
+| `startTime` | `String` |  |
+| `endTime` | `String` |  |
+| `actionType` | `String` |  |
+| `actionUrl` | `String` |  |
+| `openInNewTab` | `Boolean` |  |
+| `mixMatchSkus` | `List<MixMatchSku>` |  |
+
+`class MixMatchSku`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `variationId` | `String` |  |
+| `sortOrder` | `Integer` |  |
+
+**ProductListBannerConfigResponseDto**
+
+`record ProductListBannerConfigResponseDto`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `Long` | |
+| `conditionType` | `String` | |
+| `targetId` | `String` | |
+| `targetSlug` | `String` | |
+| `targetName` | `String` | |
+| `categoryPathSlugs` | `List<String>` | |
+| `isActive` | `boolean` | |
+| `banners` | `List<Banner>` | |
+| `createdAt` | `String` | |
+| `updatedAt` | `String` | |
+
+`record Banner`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `String` | |
+| `enabled` | `boolean` | |
+| `imageUrl` | `String` | |
+| `startTime` | `String` | |
+| `endTime` | `String` | |
+| `actionType` | `String` | |
+| `actionUrl` | `String` | |
+| `openInNewTab` | `boolean` | |
+| `mixMatchSkus` | `List<MixMatchSku>` | |
+
+`record MixMatchSku`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `variationId` | `String` | |
+| `sortOrder` | `int` | |
 
 ## CMS - Trang & block
 
@@ -961,6 +1175,8 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `footerLogoUrl` | `String` | size max=500 |
 | `certificationImageUrl` | `String` | size max=500 |
 | `certificationUrl` | `String` | size max=500 |
+| `newsletterHeading` | `String` | size max=200 |
+| `newsletterSubHeading` | `String` | size max=300 |
 | `socialLinks` | `List<SocialLink>` | size max=10 |
 | `menuColumns` | `List<MenuColumn>` | size max=6 |
 
@@ -1067,6 +1283,8 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `footerLogoUrl` | `String` | |
 | `certificationImageUrl` | `String` | |
 | `certificationUrl` | `String` | |
+| `newsletterHeading` | `String` | |
+| `newsletterSubHeading` | `String` | |
 | `socialLinks` | `List<SocialLink>` | |
 | `menuColumns` | `List<MenuColumn>` | |
 | `updatedAt` | `String` | |
@@ -1338,6 +1556,277 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | `endsAt` | `Date` |  |
 | `status` | `String` |  |
 
+## Khuyến mãi - Chiến dịch (wizard nháp → phát hành) & Runtime
+
+### Endpoint — `AdminPromotionCampaignRest`
+
+| Method | Path | Auth | Query | Body | Header |
+|---|---|---|---|---|---|
+| GET | `/admin/promotions/campaigns` | ADMIN, CATALOG_MANAGER | `params` |  |  |
+| GET | `/admin/promotions/drafts` | ADMIN, CATALOG_MANAGER | `page`?, `limit`?, `take`?, `status`?, `search`? |  |  |
+| POST | `/admin/promotions/drafts` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| GET | `/admin/promotions/drafts/{draftId}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| PATCH | `/admin/promotions/drafts/{draftId}` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| DELETE | `/admin/promotions/drafts/{draftId}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/promotions/drafts/{draftId}/publish` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/drafts/{draftId}/components` | ADMIN, CATALOG_MANAGER |  |  |  |
+| PUT | `/admin/promotions/drafts/{draftId}/target` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| PUT | `/admin/promotions/drafts/{draftId}/audience` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| PUT | `/admin/promotions/drafts/{draftId}/applicability` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| GET | `/admin/promotions/drafts/{draftId}/schemas` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/promotions/drafts/{draftId}/schemas` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| PUT | `/admin/promotions/drafts/{draftId}/schemas/order` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| GET | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| PATCH | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| DELETE | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/components` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/condition-config-options` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/benefit-config-options` | ADMIN, CATALOG_MANAGER |  |  |  |
+| PUT | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/condition` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| PUT | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/benefit` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| GET | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/voucher-code-authoring` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/voucher-codes` | ADMIN, CATALOG_MANAGER |  |  |  |
+| PUT | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/voucher-codes` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| DELETE | `/admin/promotions/drafts/{draftId}/schemas/{schemaId}/voucher-codes/{voucherCodeId}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/published/{promotionId}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/published/{promotionId}/quota-statistics` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/published/{promotionId}/components` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/published/{promotionId}/schemas` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/published/{promotionId}/schemas/{schemaId}/components` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/promotions/published/{promotionId}/schemas/{schemaId}/voucher-codes` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/promotions/published/{promotionId}/pause` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/promotions/published/{promotionId}/resume` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/promotions/published/{promotionId}/end` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/promotions/published/{promotionId}/schemas/{schemaId}/unpublish` | ADMIN, CATALOG_MANAGER |  |  |  |
+
+### Endpoint — `AdminPromotionRuntimeRest`
+
+| Method | Path | Auth | Query | Body | Header |
+|---|---|---|---|---|---|
+| POST | `/admin/promotions/runtime/evaluate` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| POST | `/admin/promotions/drafts/{draftId}/simulate` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| POST | `/admin/promotions/drafts/{draftId}/simulation-vouchers/discover` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| POST | `/admin/promotions/vouchers/discover` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| POST | `/admin/orders/promotion-vouchers/discover` | ADMIN, ORDER_MANAGER |  | `Map<String, Object>` |  |
+| POST | `/admin/promotions/vouchers/validate-code` | ADMIN, CATALOG_MANAGER |  | `Map<String, Object>` |  |
+| POST | `/admin/orders/promotion-vouchers/validate-code` | ADMIN, ORDER_MANAGER |  | `Map<String, Object>` |  |
+| GET | `/admin/promotions/customer-audience/by-phone` | ADMIN, CATALOG_MANAGER | `phone` |  |  |
+
+### DTO
+
+## Điều hướng (Navigation)
+
+### Endpoint — `AdminNavigationRest`
+
+| Method | Path | Auth | Query | Body | Header |
+|---|---|---|---|---|---|
+| GET | `/admin/cms/navigations` | ADMIN, CATALOG_MANAGER |  |  |  |
+| GET | `/admin/cms/navigations/publish-status` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/cms/navigations/publish` | ADMIN, CATALOG_MANAGER |  |  |  |
+| DELETE | `/admin/cms/navigations/cache` | ADMIN, CATALOG_MANAGER |  |  |  |
+| PATCH | `/admin/cms/navigations/reorder` | ADMIN, CATALOG_MANAGER |  | `AdminNavigationReorderRequestDto` |  |
+| POST | `/admin/cms/navigations` | ADMIN, CATALOG_MANAGER |  | `AdminNavigationRequestDto` |  |
+| GET | `/admin/cms/navigations/{id}` | ADMIN, CATALOG_MANAGER |  |  |  |
+| PATCH | `/admin/cms/navigations/{id}` | ADMIN, CATALOG_MANAGER |  | `AdminNavigationRequestDto` |  |
+| PATCH | `/admin/cms/navigations/{id}/archive` | ADMIN, CATALOG_MANAGER |  |  |  |
+
+### Endpoint — `NavigationRest`
+
+| Method | Path | Auth | Query | Body | Header |
+|---|---|---|---|---|---|
+| GET | `/storefront/cms/navigation` | Public |  |  |  |
+| GET | `/storefront/cms/navigation/plp-rail` | Public | `categoryId`?, `rootTargetId`?, `rootUrl`? |  |  |
+
+### DTO
+
+**AdminNavigationRequestDto**
+
+`class AdminNavigationRequestDto`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `label` | `String` |  |
+| `type` | `String` |  |
+| `parentId` | `Long` |  |
+| `targetId` | `String` |  |
+| `url` | `String` |  |
+| `queryParams` | `Map<String, Object>` |  |
+| `icon` | `String` |  |
+| `image` | `String` |  |
+| `openInNewTab` | `Boolean` |  |
+| `showOnMenuPopup` | `Boolean` |  |
+| `showOnPlp` | `Boolean` |  |
+| `sortOrder` | `Integer` |  |
+| `badge` | `Badge` |  |
+| `clearBadge` | `Boolean` |  |
+
+`class Badge`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `Long` |  |
+| `designType` | `String` |  |
+| `displayText` | `String` |  |
+| `imageUrl` | `String` |  |
+| `styleConfig` | `Map<String, Object>` |  |
+| `startTime` | `String` |  |
+| `endTime` | `String` |  |
+| `confirmReplaceSchedule` | `Boolean` |  |
+
+**AdminNavigationReorderRequestDto**
+
+`class AdminNavigationReorderRequestDto`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `items` | `List<Item>` |  |
+
+`class Item`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `Long` |  |
+| `sortOrder` | `Integer` |  |
+
+**NavigationResponseDto**
+
+`record NavigationResponseDto`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `Long` | |
+| `tenantCode` | `String` | |
+| `parentId` | `Long` | |
+| `label` | `String` | |
+| `type` | `String` | |
+| `targetId` | `String` | |
+| `url` | `String` | |
+| `queryParams` | `Object>` | |
+| `icon` | `String` | |
+| `image` | `String` | |
+| `openInNewTab` | `boolean` | |
+| `sortOrder` | `int` | |
+| `showOnMenuPopup` | `boolean` | |
+| `showOnPlp` | `boolean` | |
+| `isArchived` | `boolean` | |
+| `layer` | `String` | |
+| `badges` | `List<Badge>` | |
+| `children` | `List<NavigationResponseDto>` | |
+| `createdAt` | `String` | |
+| `updatedAt` | `String` | |
+
+`record Badge`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `Long` | |
+| `navigationId` | `Long` | |
+| `designType` | `String` | |
+| `displayText` | `String` | |
+| `imageUrl` | `String` | |
+| `styleConfig` | `Object>` | |
+| `startTime` | `String` | |
+| `endTime` | `String` | |
+| `layer` | `String` | |
+| `createdAt` | `String` | |
+| `updatedAt` | `String` | |
+
+**StorefrontNavigationDto**
+
+`record StorefrontNavigationDto`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `items` | `List<Item>` | |
+
+`record LinkTarget`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `kind` | `String` | |
+| `targetId` | `String` | |
+| `url` | `String` | |
+| `queryParams` | `Object>` | |
+
+`record Badge`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `String` | |
+| `designType` | `String` | |
+| `displayText` | `String` | |
+| `imageUrl` | `String` | |
+| `styleConfig` | `Object>` | |
+| `startTime` | `String` | |
+| `endTime` | `String` | |
+
+`record Item`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `String` | |
+| `label` | `String` | |
+| `type` | `String` | |
+| `targetId` | `String` | |
+| `url` | `String` | |
+| `queryParams` | `Object>` | |
+| `icon` | `String` | |
+| `image` | `String` | |
+| `openInNewTab` | `boolean` | |
+| `sortOrder` | `int` | |
+| `parentId` | `String` | |
+| `showOnMenuPopup` | `boolean` | |
+| `showOnPlp` | `boolean` | |
+| `linkTarget` | `LinkTarget` | |
+| `badge` | `Badge` | |
+| `hasChildren` | `boolean` | |
+| `expandOnly` | `boolean` | |
+| `viewAllLabel` | `String` | |
+| `parentEffectivelyHidden` | `boolean` | |
+| `children` | `List<Item>` | |
+
+## Sản phẩm ghim tìm kiếm
+
+### Endpoint — `AdminSearchPinnedRest`
+
+| Method | Path | Auth | Query | Body | Header |
+|---|---|---|---|---|---|
+| GET | `/admin/catalog/search-pinned-products` | ADMIN, CATALOG_MANAGER |  |  |  |
+| POST | `/admin/catalog/search-pinned-products` | ADMIN, CATALOG_MANAGER |  | `AdminSearchPinnedRequestDto` |  |
+| PATCH | `/admin/catalog/search-pinned-products/{id}` | ADMIN, CATALOG_MANAGER |  | `AdminSearchPinnedRequestDto` |  |
+| DELETE | `/admin/catalog/search-pinned-products/{id}` | ADMIN, CATALOG_MANAGER |  |  |  |
+
+### DTO
+
+**AdminSearchPinnedRequestDto**
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `keywordPattern` | `String` |  |
+| `productId` | `Long` |  |
+| `position` | `Integer` |  |
+| `startDate` | `String` |  |
+| `endDate` | `String` |  |
+| `isActive` | `Boolean` |  |
+| `clearKeywordPattern` | `Boolean` |  |
+| `clearEndDate` | `Boolean` |  |
+
+**SearchPinnedResponseDto**
+
+`record SearchPinnedResponseDto`
+
+| Field | Kiểu | Ràng buộc |
+|---|---|---|
+| `id` | `Long` | |
+| `keywordPattern` | `String` | |
+| `productId` | `Long` | |
+| `position` | `int` | |
+| `startDate` | `String` | |
+| `endDate` | `String` | |
+| `isActive` | `boolean` | |
+| `createdAt` | `String` | |
+| `updatedAt` | `String` | |
+
 ## Dashboard
 
 ### Endpoint — `AdminDashboardRest`
@@ -1441,7 +1930,7 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 | GET | `/admin/ie/topics` | ADMIN, CATALOG_MANAGER |  |  |  |
 | POST | `/admin/ie/export/products` | ADMIN, CATALOG_MANAGER |  | `IeProductExportRequestDto` |  |
 | POST | `/admin/ie/import/products` | ADMIN, CATALOG_MANAGER | `referenceType`?, `referenceId`? | `multipart: file` |  |
-| GET | `/admin/ie/jobs` | ADMIN, CATALOG_MANAGER | `jobType`?, `status`?, `page`? =1, `take`? =20 |  |  |
+| GET | `/admin/ie/jobs` | ADMIN, CATALOG_MANAGER | `jobType`?, `status`?, `referenceType`?, `referenceId`?, `page`? =1, `take`? =20 |  |  |
 | GET | `/admin/ie/job/status/{jobId}` | ADMIN, CATALOG_MANAGER |  |  |  |
 | GET | `/admin/ie/jobs/{jobId}/result-rows` | ADMIN, CATALOG_MANAGER | `status`?, `page`? =1, `take`? =20 |  |  |
 
@@ -1517,12 +2006,12 @@ File này do script `claude/_gen/gen_contract.py` sinh; sửa source rồi chạ
 
 | Method | Path | Auth | Query | Body | Header |
 |---|---|---|---|---|---|
-| GET | `/back-in-stock` | Customer (Bearer) | `page`? =1, `take`? =20, `keyword`?, `status`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `orderType`? |  |  |
-| GET | `/order-support` | Customer (Bearer) | `page`? =1, `take`? =20, `keyword`?, `status`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `orderType`? |  |  |
-| GET | `/newsletter` | Customer (Bearer) | `page`? =1, `take`? =20, `keyword`?, `status`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `orderType`? |  |  |
-| GET | `/{id}` | Customer (Bearer) |  |  |  |
-| PATCH | `/{id}/status` | Customer (Bearer) |  | `CustomerRequestStatusRequestDto` |  |
-| PATCH | `/status/bulk` | Customer (Bearer) |  | `CustomerRequestBulkStatusRequestDto` |  |
+| GET | `/admin/customer-request/back-in-stock` | ADMIN, ORDER_MANAGER | `page`? =1, `take`? =20, `keyword`?, `status`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `orderType`? |  |  |
+| GET | `/admin/customer-request/order-support` | ADMIN, ORDER_MANAGER | `page`? =1, `take`? =20, `keyword`?, `status`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `orderType`? |  |  |
+| GET | `/admin/customer-request/newsletter` | ADMIN, ORDER_MANAGER | `page`? =1, `take`? =20, `keyword`?, `status`?, `timeFilter`?, `timeFrom`?, `timeTo`?, `orderType`? |  |  |
+| GET | `/admin/customer-request/{id}` | ADMIN, ORDER_MANAGER |  |  |  |
+| PATCH | `/admin/customer-request/{id}/status` | ADMIN, ORDER_MANAGER |  | `CustomerRequestStatusRequestDto` |  |
+| PATCH | `/admin/customer-request/status/bulk` | ADMIN, ORDER_MANAGER |  | `CustomerRequestBulkStatusRequestDto` |  |
 
 ### Endpoint — `CustomerRequestRest`
 

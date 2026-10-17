@@ -28,4 +28,7 @@ public interface CollectionRepo extends PkRepo<CollectionEntity, Long> {
 
     @Modifying
     int removeProduct(@Param("collectionId") Long collectionId, @Param("productId") Long productId);
+
+    /** Id sản phẩm thuộc bộ sưu tập (dùng khi phát hành chiến dịch khuyến mãi theo bộ sưu tập). */
+    List<Long> findProductIdsByCollectionId(@Param("collectionId") Long collectionId);
 }

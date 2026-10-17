@@ -36,6 +36,12 @@ public class SiteFooterEntity extends BaseEntity {
     @Column(name = "certification_url")
     private String certificationUrl;
 
+    @Column(name = "newsletter_heading")
+    private String newsletterHeading;
+
+    @Column(name = "newsletter_sub_heading")
+    private String newsletterSubHeading;
+
     @Column(name = "social_links")
     private String socialLinks;
 

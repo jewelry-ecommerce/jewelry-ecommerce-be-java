@@ -30,8 +30,8 @@ public final class SiteLayoutResponseDto {
     }
 
     public record Footer(Long id, String copyrightText, String footerLogoUrl, String certificationImageUrl,
-                         String certificationUrl, List<SocialLink> socialLinks, List<MenuColumn> menuColumns,
-                         String updatedAt) {
+                         String certificationUrl, String newsletterHeading, String newsletterSubHeading,
+                         List<SocialLink> socialLinks, List<MenuColumn> menuColumns, String updatedAt) {
     }
 
     /** Public: header đang hiển thị (null nếu không có), footer, và logo ACTIVE theo từng type (HEADER/FOOTER/AUTH/FAVICON). */

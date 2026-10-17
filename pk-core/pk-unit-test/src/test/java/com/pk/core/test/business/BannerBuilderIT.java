@@ -124,6 +124,19 @@ class BannerBuilderIT extends IntegrationTestBase {
         assertEquals("G1 " + t, first.get("banner").get("internalName").asText());
         assertEquals(1, body(mvc.perform(get(layouts).header("Authorization", auth)).andExpect(status().isOk())).size());
 
+        // revision: layout đầu = 1; layout tạo sau = 2 (tăng dần theo vị trí); sửa layout không đổi revision.
+        assertEquals(1, detail.get("revision").asInt());
+        Map<String, Object> req2 = new java.util.LinkedHashMap<>();
+        req2.put("name", "Layout bản nháp");
+        req2.put("status", "DRAFT");
+        req2.put("items", List.of(item("A", b1, 0, Map.of("x", 0, "y", 0, "width", 1, "height", 1, "order", 0))));
+        JsonNode second = body(mvc.perform(jsonRequest(post(layouts), req2).header("Authorization", auth)).andExpect(status().isOk()));
+        assertEquals(2, second.get("revision").asInt());
+        JsonNode patched = body(mvc.perform(jsonRequest(patch(layouts + "/" + second.get("id").asLong()),
+                Map.of("name", "Đổi tên")).header("Authorization", auth)).andExpect(status().isOk()));
+        assertEquals(2, patched.get("revision").asInt());
+        assertEquals(1, body(mvc.perform(get(layouts + "/" + lid).header("Authorization", auth))).get("revision").asInt());
+
         // Render: 2 slot thật, toạ độ giữ nguyên, slot B có 2 banner theo priority.
         JsonNode r = render(code, "WEB");
         assertEquals(2, r.get("slots").size());

@@ -36,6 +36,22 @@ public final class TableConstant {
     public static final String SITE_HEADERS = "site_headers";
     public static final String SITE_FOOTER = "site_footer";
     public static final String SITE_LOGOS = "site_logos";
+    public static final String CMS_NAVIGATIONS = "cms_navigations";
+    public static final String CMS_NAVIGATION_BADGES = "cms_navigation_badges";
+    public static final String CMS_NAVIGATION_PUBLISH = "cms_navigation_publish";
+    public static final String SEARCH_PINNED_PRODUCTS = "search_pinned_products";
+    public static final String PRODUCT_LIST_BANNER_CONFIGS = "product_list_banner_configs";
+    public static final String PROMO_DRAFTS = "promo_drafts";
+    public static final String PROMO_DRAFT_COMPONENTS = "promo_draft_components";
+    public static final String PROMO_DRAFT_SCHEMAS = "promo_draft_schemas";
+    public static final String PROMO_SCHEMA_COMPONENTS = "promo_schema_components";
+    public static final String PROMO_VOUCHER_CODES = "promo_voucher_codes";
+    public static final String PROMO_PUBLISHED = "promo_published";
+public static final String ORDER_NOTES = "order_notes";
+    public static final String ORDER_AUDIT_LOGS = "order_audit_logs";
+    public static final String ORDER_RETURNS = "order_returns";
+    public static final String ORDER_RETURN_ITEMS = "order_return_items";
+    public static final String ORDER_RETURN_STATUS_HISTORY = "order_return_status_history";
     public static final String BRANDS = "brands";
     public static final String SEASONS = "seasons";
 

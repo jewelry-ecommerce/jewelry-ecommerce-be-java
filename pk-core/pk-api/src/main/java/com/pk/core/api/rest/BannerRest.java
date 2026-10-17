@@ -21,6 +21,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class BannerRest extends AbstractRest {
 
     private final BannerService bannerService;
+    private final com.pk.core.business.service.ProductListBannerService productListService;
+
+    /** Banner chèn vào danh sách sản phẩm của một đích (CATEGORY theo slug danh mục, hoặc CMS_STOREFRONT); data = null nếu không có. */
+    @GetMapping(UrlConstant.Banner.PRODUCT_LIST)
+    public BaseRes productList(@RequestParam String conditionType, @RequestParam String targetSlug,
+                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productListService.publicConfig(conditionType, targetSlug));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
 
     @GetMapping(UrlConstant.Banner.PLACEMENTS_BY_CODE + "/{code}/render")
     public BaseRes render(@PathVariable String code, @RequestParam(required = false) String platform,

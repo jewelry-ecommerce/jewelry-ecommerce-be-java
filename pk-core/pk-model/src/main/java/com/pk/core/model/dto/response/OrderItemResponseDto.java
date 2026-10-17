@@ -26,15 +26,19 @@ public class OrderItemResponseDto {
     private BigDecimal lineTotal;
     /** Số lượng đã trả; còn trả được = quantity - returnedQuantity. */
     private int returnedQuantity;
+    private String skuCode;
+    private String sizeLabel;
+    private String metalColorLabel;
 
     public static OrderItemResponseDto from(OrderItemEntity i) {
         return new OrderItemResponseDto(i.getId(), i.getProductId(), i.getSkuId(), i.getName(), i.getImageUrl(),
-                i.getQuantity(), i.getUnitPrice(), i.getLineTotal(), i.getReturnedQuantity());
+                i.getQuantity(), i.getUnitPrice(), i.getLineTotal(), i.getReturnedQuantity(),
+                i.getSkuCode(), i.getSizeLabel(), i.getMetalColorLabel());
     }
 
     public OrderItemResponseDto(Long id, Long productId, Long skuId, String name, String imageUrl, int quantity,
                                 BigDecimal unitPrice, BigDecimal lineTotal) {
-        this(id, productId, skuId, name, imageUrl, quantity, unitPrice, lineTotal, 0);
+        this(id, productId, skuId, name, imageUrl, quantity, unitPrice, lineTotal, 0, null, null, null);
     }
 
     public int getReturnableQuantity() {

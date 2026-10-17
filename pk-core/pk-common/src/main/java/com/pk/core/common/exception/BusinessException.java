@@ -11,6 +11,8 @@ public class BusinessException extends RuntimeException {
     private final int status;
     private final String code;
     private final transient Object[] args;
+    /** Danh sách đối tượng liên quan (VD header trùng lịch) -> BaseRes.dependencies cho FE. */
+    private transient java.util.List<java.util.Map<String, Object>> dependencies;
 
     public BusinessException(int status, String code, String message) {
         this(status, code, message, (Object[]) null);
@@ -72,5 +74,14 @@ public class BusinessException extends RuntimeException {
 
     public Object[] getArgs() {
         return args;
+    }
+
+    public BusinessException withDependencies(java.util.List<java.util.Map<String, Object>> deps) {
+        this.dependencies = deps;
+        return this;
+    }
+
+    public java.util.List<java.util.Map<String, Object>> getDependencies() {
+        return dependencies;
     }
 }

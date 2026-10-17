@@ -48,4 +48,8 @@ public class BannerPlacementLayoutEntity extends UpdateEntity {
 
     @Column(name = "note")
     private String note;
+
+    /** Số phiên bản của layout trong vị trí (1,2,3...; tạo mới = lớn nhất + 1). */
+    @Column(name = "revision")
+    private int revision = 1;
 }

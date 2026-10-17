@@ -18,6 +18,8 @@ import com.pk.core.model.dto.request.AdminBannerPlacementRequestDto;
 import com.pk.core.model.dto.request.AdminBannerRequestDto;
 import com.pk.core.model.dto.response.MessageResponseDto;
 import org.springframework.validation.annotation.Validated;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -39,6 +41,7 @@ public class AdminBannerRest extends AbstractRest {
 
     private final BannerService bannerService;
     private final BannerPlacementService placementService;
+    private final com.pk.core.business.service.ProductListBannerService productListService;
     private final BannerLayoutService layoutService;
 
     @GetMapping(UrlAdminConstant.Banner.BANNERS)
@@ -127,6 +130,68 @@ public class AdminBannerRest extends AbstractRest {
     }
 
     // ---------- Banner builder: layout của vị trí (slot / toạ độ / thứ tự) ----------
+
+    // ---------- Banner chèn vào danh sách sản phẩm (V32) ----------
+
+    @GetMapping(UrlAdminConstant.Banner.PRODUCT_LIST_CONFIGS)
+    public BaseRes listProductListConfigs(@org.springframework.web.bind.annotation.RequestParam(required = false) String conditionType,
+                                           HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productListService.list(conditionType));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PostMapping(UrlAdminConstant.Banner.PRODUCT_LIST_CONFIGS)
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public BaseRes createProductListConfig(@org.springframework.web.bind.annotation.RequestBody com.pk.core.model.dto.request.AdminProductListBannerConfigRequestDto request,
+                                            @org.springframework.security.core.annotation.AuthenticationPrincipal com.pk.core.identity.security.model.SecurityUser principal,
+                                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productListService.create(request, principal == null ? null : principal.getId()));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PatchMapping(UrlAdminConstant.Banner.PRODUCT_LIST_CONFIGS + "/{id}")
+    public BaseRes updateProductListConfig(@PathVariable Long id,
+                                            @org.springframework.web.bind.annotation.RequestBody com.pk.core.model.dto.request.AdminProductListBannerConfigRequestDto request,
+                                            @org.springframework.security.core.annotation.AuthenticationPrincipal com.pk.core.identity.security.model.SecurityUser principal,
+                                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(productListService.update(id, request, principal == null ? null : principal.getId()));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @DeleteMapping(UrlAdminConstant.Banner.PRODUCT_LIST_CONFIGS + "/{id}")
+    public BaseRes deleteProductListConfig(@PathVariable Long id, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            productListService.delete(id);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("success", true);
+            body.put("id", id);
+            return restSuccessHandle.handleSuccess(body);
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @DeleteMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}")
+    public BaseRes deletePlacement(@PathVariable Long id, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            placementService.delete(id);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("success", true);
+            body.put("id", id);
+            return restSuccessHandle.handleSuccess(body);
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
 
     @GetMapping(UrlAdminConstant.Banner.PLACEMENTS + "/{id}/layouts")
     public BaseRes listLayouts(@PathVariable Long id, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {

@@ -111,6 +111,10 @@ public class OrderEntity extends UpdateEntity {
     @Column(name = "refunded_amount")
     private BigDecimal refundedAmount = BigDecimal.ZERO;
 
+    /** Nguồn tạo đơn: WEBSITE (khách tự đặt) hoặc ADMIN (nhân viên tạo hộ). */
+    @Column(name = "source")
+    private String source = "WEBSITE";
+
     @Column(name = "note")
     private String note;
 

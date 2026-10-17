@@ -31,6 +31,9 @@ public class BannerPlacementServiceImpl implements BannerPlacementService {
 
     private final BannerPlacementRepo placements;
     private final BannerLayoutSupport support;
+    private final com.pk.core.business.repository.BannerRepo banners;
+    private final com.pk.core.business.repository.BannerPlacementLayoutRepo layouts;
+    private final com.pk.core.business.repository.BannerPlacementLayoutItemRepo layoutItems;
 
     @Transactional(readOnly = true)
     @Override
@@ -96,6 +99,25 @@ public class BannerPlacementServiceImpl implements BannerPlacementService {
         }
         placements.update(e);
         return toDto(e);
+    }
+
+    @Transactional
+    @Override
+    public void delete(Long id) {
+        BannerPlacementEntity e = id == null ? null : placements.findOne(id);
+        if (e == null) {
+            throw new ResourceNotFoundException("Vị trí banner", "BannerPlacement", id);
+        }
+        Long used = banners.countByPlacementCode(e.getCode());
+        if (used != null && used > 0) {
+            throw BusinessException.conflict("PLACEMENT_IN_USE",
+                    "Vị trí \"" + e.getName() + "\" còn " + used + " banner đang dùng, hãy chuyển/xoá banner trước", used);
+        }
+        for (var layout : layouts.findByPlacementId(id)) {
+            layoutItems.deleteByLayoutId(layout.getId());
+            layouts.delete(layout);
+        }
+        placements.delete(e);
     }
 
     private BannerPlacementResponseDto toDto(BannerPlacementEntity e) {

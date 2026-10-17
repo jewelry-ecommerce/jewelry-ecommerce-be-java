@@ -34,6 +34,9 @@ public class BaseRes {
     /** errors: chi tiết từng lỗi (validate theo field, hoặc 1 phần tử cho lỗi nghiệp vụ) - optional. */
     private List<ErrorDetailRes> errors;
 
+    /** dependencies: đối tượng liên quan tới lỗi (VD conflictingHeaders) - optional, null thì không xuất hiện. */
+    private List<java.util.Map<String, Object>> dependencies;
+
     /** data: dữ liệu trả về khi thành công. */
     private Object data;
 

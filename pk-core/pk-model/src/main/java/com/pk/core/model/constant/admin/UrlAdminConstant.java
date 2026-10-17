@@ -46,6 +46,7 @@ public class UrlAdminConstant {
         public final String COLLECTIONS = BASE + "/collections";
         public final String ATTRIBUTES = BASE + "/attributes";
         public final String BRANDS = BASE + "/brands";
+        public final String SEARCH_PINNED = BASE + "/search-pinned-products";
         public final String SEASONS = BASE + "/seasons";
         /** POST multipart (field `file`) - upload ảnh/video dùng cho media sản phẩm, banner, CMS. */
         public final String UPLOAD = BASE + "/upload";
@@ -66,6 +67,18 @@ public class UrlAdminConstant {
     @UtilityClass
     public static class Promotion {
         public final String BASE = Common.BASE + "/promotions";
+        /** Wizard chiến dịch: nháp, bản đã phát hành, tổng quan (FE: promotion/promotion-drafts, promotion/promotions, promotion/promotion-campaigns). */
+        public final String DRAFTS = BASE + "/drafts";
+        public final String PUBLISHED = BASE + "/published";
+        public final String CAMPAIGNS = BASE + "/campaigns";
+        /** Chạy thử khuyến mãi, tra cứu voucher, tra khách theo SĐT. */
+        public final String RUNTIME_EVALUATE = BASE + "/runtime/evaluate";
+        public final String VOUCHER_DISCOVER = BASE + "/vouchers/discover";
+        public final String VOUCHER_VALIDATE = BASE + "/vouchers/validate-code";
+        public final String CUSTOMER_BY_PHONE = BASE + "/customer-audience/by-phone";
+        /** Cùng nghiệp vụ discover/validate nhưng nằm trong nhóm /admin/orders/** để vai trò ORDER_MANAGER dùng được khi tạo đơn (FE: order/orders/promotion-vouchers/*). */
+        public final String ORDER_VOUCHER_DISCOVER = Common.BASE + "/orders/promotion-vouchers/discover";
+        public final String ORDER_VOUCHER_VALIDATE = Common.BASE + "/orders/promotion-vouchers/validate-code";
     }
 
     /** AdminPromotionVoucherRest (pk-api - mục K spec). */
@@ -80,6 +93,12 @@ public class UrlAdminConstant {
     @UtilityClass
     public static class Order {
         public final String BASE = Common.BASE + "/orders";
+    }
+
+    /** AdminOrderReturnRest (yêu cầu đổi/trả hàng): POST .../list, POST .../quote|commit, GET/PUT /{id}, PUT /{id}/approve|reject. */
+    @UtilityClass
+    public static class OrderReturn {
+        public final String BASE = Common.BASE + "/order-returns";
     }
 
     /** AdminCustomerRest (pk-api, gói api.rest.admin - mục N spec). CHỈ đọc (không có API tạo/sửa/
@@ -99,6 +118,7 @@ public class UrlAdminConstant {
         public final String HEADERS = BASE + "/headers";
         public final String FOOTER = BASE + "/footer";
         public final String LOGOS = BASE + "/logos";
+        public final String NAVIGATIONS = BASE + "/navigations";
     }
 
     /** AdminBadgeRest (pk-api, gói api.rest.admin - mục P spec). GET/POST/PUT/PATCH/DELETE cụ thể
@@ -135,6 +155,7 @@ public class UrlAdminConstant {
     public static class Banner {
         public final String BANNERS = Common.BASE + "/banner/banners";
         public final String PLACEMENTS = Common.BASE + "/banner/placements";
+        public final String PRODUCT_LIST_CONFIGS = Common.BASE + "/banner/product-list-configs";
     }
 
     /** AdminCustomerRequestRest (pk-api, gói api.rest.admin - spec FE nhóm Customer Request). Sub-path /back-in-stock,

@@ -42,6 +42,8 @@ public class UrlConstant {
         public final String BASE = Storefront.BASE + "/product";
         public final String CATEGORIES = BASE + "/categories";
         public final String COLLECTIONS = BASE + "/collections";
+        /** Sản phẩm ghim ở ô tìm kiếm (landing) đang hiệu lực, công khai. */
+        public final String SEARCH_PINNED = BASE + "/search-pinned";
         /** Chi tiết theo slug: BASE + "/{slug}" - ghép ở Rest bằng @GetMapping(BASE + "/{slug}"). */
     }
 
@@ -120,6 +122,8 @@ public class UrlConstant {
         public final String PAGES = Storefront.BASE + "/cms/pages";
         /** Header (thanh thông báo đang chạy) + footer + logo đang dùng - công khai, chỉ GET. */
         public final String SITE_LAYOUT = Storefront.BASE + "/cms/site-layout";
+        /** Menu điều hướng đã xuất bản (công khai, chỉ GET): {NAVIGATION} và {NAVIGATION}/plp-rail. */
+        public final String NAVIGATION = Storefront.BASE + "/cms/navigation";
     }
 
     /** BannerRest (pk-api) - render banner theo mã vị trí (/storefront/banner/placements/code/{code}/render), công
@@ -127,6 +131,8 @@ public class UrlConstant {
     @UtilityClass
     public static class Banner {
         public final String PLACEMENTS_BY_CODE = Storefront.BASE + "/banner/placements/code";
+        /** Banner chèn vào danh sách sản phẩm theo điều kiện (danh mục / trang CMS), công khai chỉ GET. */
+        public final String PRODUCT_LIST = Storefront.BASE + "/banner/product-list";
     }
 
     /** PreOrderRest (pk-api) - khách xem cấu hình đặt trước đang hiệu lực (enabled/message), công khai. Mở rộng ngoài

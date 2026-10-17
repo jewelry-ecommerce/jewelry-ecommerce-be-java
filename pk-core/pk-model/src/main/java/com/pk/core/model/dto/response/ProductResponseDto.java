@@ -45,6 +45,8 @@ public class ProductResponseDto extends BaseDto {
     private Date publishedAt;
     /** Slug danh mục (service gán sau khi dựng DTO) - dùng cho field FE `category.slug`. */
     private String categorySlug;
+    /** Id tài khoản tạo sản phẩm (admin-only; null = không rõ / sản phẩm cũ). */
+    private Long createdById;
     /** Thương hiệu / mùa (V27), null = chưa gán. */
     private Long brandId;
     private String brandName;

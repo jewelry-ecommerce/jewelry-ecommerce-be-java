@@ -83,6 +83,9 @@ public class AdminCatalogRest extends AbstractRest {
                                  @RequestParam(required = false) Long brandId,
                                  @RequestParam(required = false) Long seasonId,
                                  @RequestParam(required = false) String seasonUuid,
+                                 @RequestParam(required = false) String orderBy,
+                                 @RequestParam(required = false) String orderType,
+                                 @RequestParam(required = false) Long createdById,
                                  @RequestParam(required = false, defaultValue = "1") int page,
                                  @RequestParam(required = false, defaultValue = "20") int take,
                                  HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
@@ -90,7 +93,7 @@ public class AdminCatalogRest extends AbstractRest {
             return restSuccessHandle.handleSuccess(productService.searchForAdmin(new AdminProductQuery(status,
                     categorySlug, collectionSlug, search, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
                     createdFrom, createdTo, updatedFrom, updatedTo, page, take, hasPendingApproval, approvalStatus, stockStatus, brandId,
-                    seasonOf(seasonId, seasonUuid))));
+                    seasonOf(seasonId, seasonUuid), orderBy, orderType, createdById)));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -114,12 +117,13 @@ public class AdminCatalogRest extends AbstractRest {
                                   @RequestParam(required = false) Long brandId,
                                   @RequestParam(required = false) Long seasonId,
                                   @RequestParam(required = false) String seasonUuid,
+                                  @RequestParam(required = false) Long createdById,
                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(productService.countsForAdmin(new AdminProductQuery(null,
                     categorySlug, collectionSlug, search, minPrice, maxPrice, timeFilter, timeFrom, timeTo,
                     createdFrom, createdTo, updatedFrom, updatedTo, 1, 20, null, null, stockStatus, brandId,
-                    seasonOf(seasonId, seasonUuid))));
+                    seasonOf(seasonId, seasonUuid), null, null, createdById)));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
@@ -128,9 +132,10 @@ public class AdminCatalogRest extends AbstractRest {
     @PostMapping(UrlAdminConstant.Catalog.PRODUCTS)
     @ResponseStatus(HttpStatus.CREATED)
     public BaseRes createProduct(@Valid @RequestBody AdminCreateProductRequestDto request,
+                                  @org.springframework.security.core.annotation.AuthenticationPrincipal com.pk.core.identity.security.model.SecurityUser principal,
                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(productService.create(request));
+            return restSuccessHandle.handleSuccess(productService.create(request, principal == null ? null : principal.getId()));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

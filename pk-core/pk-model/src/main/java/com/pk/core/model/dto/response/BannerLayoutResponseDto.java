@@ -19,6 +19,8 @@ public class BannerLayoutResponseDto {
     private Date activeFrom;
     private Date activeTo;
     private String note;
+    /** Phiên bản tăng dần trong vị trí; layout mới nhất có revision lớn nhất. */
+    private int revision;
     private Date createdDate;
     private Date updatedDate;
     private List<BannerLayoutItemResponseDto> items;

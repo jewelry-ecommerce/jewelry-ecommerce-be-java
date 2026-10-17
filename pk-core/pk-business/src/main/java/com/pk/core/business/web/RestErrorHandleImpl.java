@@ -72,6 +72,7 @@ public class RestErrorHandleImpl implements RestErrorHandle {
             detail.setCode(be.getCode());
             detail.setMessage(message);
             res.addError(detail);
+            res.setDependencies(be.getDependencies());
             setStatus(response, be.getStatus());
             return res;
         }

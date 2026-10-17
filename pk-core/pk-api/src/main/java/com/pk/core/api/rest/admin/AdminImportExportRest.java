@@ -66,11 +66,13 @@ public class AdminImportExportRest extends AbstractRest {
 
     @GetMapping(UrlAdminConstant.Ie.JOBS)
     public BaseRes jobs(@RequestParam(required = false) String jobType, @RequestParam(required = false) String status,
+                        @RequestParam(required = false) String referenceType,
+                        @RequestParam(required = false) String referenceId,
                         @RequestParam(required = false, defaultValue = "1") int page,
                         @RequestParam(required = false, defaultValue = "20") int take,
                         HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(service.listJobs(jobType, status, page, take));
+            return restSuccessHandle.handleSuccess(service.listJobs(jobType, status, referenceType, referenceId, page, take));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

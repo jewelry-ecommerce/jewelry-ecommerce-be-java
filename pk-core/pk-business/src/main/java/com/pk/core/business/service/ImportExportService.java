@@ -20,6 +20,9 @@ public interface ImportExportService {
 
     PageResponse<IeJobResponseDto> listJobs(String jobType, String status, int page, int take);
 
+    /** Như trên, thêm lọc theo tham chiếu (referenceType/referenceId, so khớp không phân biệt hoa thường). */
+    PageResponse<IeJobResponseDto> listJobs(String jobType, String status, String referenceType, String referenceId, int page, int take);
+
     IeJobResponseDto getJob(Long jobId);
 
     PageResponse<IeResultRowDto> resultRows(Long jobId, String status, int page, int take);

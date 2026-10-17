@@ -387,11 +387,21 @@ public class ImportExportServiceImpl implements ImportExportService {
 
     @Override
     public PageResponse<IeJobResponseDto> listJobs(String jobType, String status, int page, int take) {
+        return listJobs(jobType, status, null, null, page, take);
+    }
+
+    @Override
+    public PageResponse<IeJobResponseDto> listJobs(String jobType, String status, String referenceType,
+                                                    String referenceId, int page, int take) {
+        String rt = referenceType == null ? "" : referenceType.trim();
+        String rid = referenceId == null ? "" : referenceId.trim();
         String t = jobType == null ? "" : jobType.trim().toUpperCase(Locale.ROOT);
         String s = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
         List<IeJobResponseDto> all = store.allJobs().stream()
                 .filter(j -> t.isEmpty() || t.equals(j.getJobType()))
                 .filter(j -> s.isEmpty() || s.equals(j.getStatus()))
+                .filter(j -> rt.isEmpty() || rt.equalsIgnoreCase(j.getReferenceType()))
+                .filter(j -> rid.isEmpty() || rid.equalsIgnoreCase(j.getReferenceId()))
                 .map(IeJobResponseDto::from).toList();
         return PageResponse.paginate(all, page, take);
     }

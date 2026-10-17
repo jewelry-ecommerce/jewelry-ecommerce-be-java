@@ -18,6 +18,9 @@ public interface ProductService {
      * GET /storefront/product/{slug}. */
     ProductResponseDto findBySlug(String slug);
 
+    /** Sản phẩm PUBLISHED (và danh mục hiển thị) theo id cho storefront; null nếu không còn bán. */
+    ProductResponseDto findPublishedById(Long productId);
+
     /** Danh sách/tìm kiếm sản phẩm - GET /storefront/product. Tham số rỗng/null = không lọc
      * (categorySlug, collectionSlug, keyword, material truyền "" hoặc null đều được coi là bỏ qua;
      * minPrice/maxPrice truyền null sẽ tự lấy khoảng mặc định [0, vô cực]).
@@ -62,7 +65,12 @@ public interface ProductService {
 
     /** Tạo sản phẩm + SKU - POST /admin/catalog/products. 409 DUPLICATE_CODE/DUPLICATE_SLUG/
      * DUPLICATE_SKU nếu trùng. */
-    ProductResponseDto create(AdminCreateProductRequestDto req);
+    default ProductResponseDto create(AdminCreateProductRequestDto req) {
+        return create(req, null);
+    }
+
+    /** Tạo sản phẩm, ghi người tạo (actorId = id tài khoản admin; null nếu không rõ). */
+    ProductResponseDto create(AdminCreateProductRequestDto req, Long actorId);
 
     /** Cập nhật sản phẩm - PUT /admin/catalog/products/{id}. KHÔNG đổi variants (xem
      * AdminUpdateProductRequestDto javadoc). */

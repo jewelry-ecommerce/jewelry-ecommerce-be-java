@@ -68,4 +68,25 @@ public interface OrderService {
     /** POST /admin/orders/{orderCode}/refund - chỉ khi đơn paymentStatus=PAID, chuyển paymentStatus
      * sang REFUNDED, ghi amount/reason vào timeline (xem AdminOrderRefundRequestDto javadoc). */
     OrderResponseDto refund(String code, BigDecimal amount, String reason);
+
+    // ---------- Admin OMS nâng cao ----------
+
+    /** Báo giá tạm tính khi tạo đơn thủ công (không giữ tồn). */
+    java.util.Map<String, Object> quoteForAdmin(com.pk.core.model.dto.request.OmsRequestDtos.OrderUpsert req);
+
+    /** Nhân viên tạo đơn hộ khách: giữ chỗ tồn, tạo đơn nguồn ADMIN, createdId = adminId; có thể chống trùng bằng idempotencyKey. */
+    OrderResponseDto createByAdmin(com.pk.core.model.dto.request.OmsRequestDtos.OrderUpsert req, Long adminId);
+
+    /** Sửa đơn PENDING/CONFIRMED (thông tin nhận hàng, ghi chú; đổi sản phẩm chỉ khi PENDING). */
+    OrderResponseDto updateByAdmin(String code, com.pk.core.model.dto.request.OmsRequestDtos.OrderUpsert req, Long adminId);
+
+    /** Xác nhận đã thu tiền thủ công (UNPAID -> PAID). */
+    OrderResponseDto confirmPaymentByAdmin(String code, String note);
+
+    /** Sao chép đơn (tuỳ chọn huỷ đơn nguồn). */
+    OrderResponseDto duplicateForAdmin(String sourceKey, boolean replaceSource, String cancelReason, String cancelNote, Long adminId);
+
+    /** Đơn thay thế cho yêu cầu đổi hàng: `credit` = giá trị hàng đã trả, trừ vào đơn mới. */
+    OrderResponseDto createExchangeOrder(String sourceKey, java.util.Map<Long, Integer> qtyBySku, BigDecimal credit,
+                                         String note, Long adminId);
 }

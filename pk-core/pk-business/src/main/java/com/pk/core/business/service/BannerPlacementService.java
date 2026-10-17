@@ -12,4 +12,7 @@ public interface BannerPlacementService {
     BannerPlacementResponseDto create(AdminBannerPlacementRequestDto req);
 
     BannerPlacementResponseDto update(Long id, AdminBannerPlacementRequestDto req);
+
+    /** Xoá vị trí (kèm layout/item). 404 nếu không có; 409 PLACEMENT_IN_USE nếu còn banner chưa xoá dùng vị trí. */
+    void delete(Long id);
 }

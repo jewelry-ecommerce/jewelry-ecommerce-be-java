@@ -74,6 +74,8 @@ public class BannerLayoutServiceImpl implements BannerLayoutService {
         BannerPlacementEntity placement = requirePlacement(placementId);
         BannerPlacementLayoutEntity layout = new BannerPlacementLayoutEntity();
         layout.setPlacementId(placementId);
+        layout.setRevision(layouts.findByPlacementId(placementId).stream()
+                .mapToInt(BannerPlacementLayoutEntity::getRevision).max().orElse(0) + 1);
         applyHeader(layout, req, true);
         List<BannerPlacementLayoutItemEntity> newItems = buildItems(req.getItems());
         validateItems(placement, newItems);
@@ -396,6 +398,7 @@ public class BannerLayoutServiceImpl implements BannerLayoutService {
         d.setActiveFrom(l.getActiveFrom());
         d.setActiveTo(l.getActiveTo());
         d.setNote(l.getNote());
+        d.setRevision(l.getRevision());
         d.setCreatedDate(l.getCreatedDate());
         d.setUpdatedDate(l.getUpdatedDate());
         d.setItems(items.findByLayoutId(l.getId()).stream().map(this::toItemDto).toList());

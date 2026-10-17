@@ -31,6 +31,8 @@ import com.pk.core.model.dto.request.AdminOrderStatusRequestDto;
 import com.pk.core.model.dto.request.GuestOrderRequestDto;
 import com.pk.core.model.dto.request.CreateOrderRequestDto;
 import com.pk.core.model.dto.request.OrderItemRequestDto;
+import com.pk.core.common.util.PhoneUtil;
+import com.pk.core.model.dto.request.OmsRequestDtos;
 import com.pk.core.model.dto.response.OrderItemResponseDto;
 import com.pk.core.model.dto.response.OrderResponseDto;
 import com.pk.core.model.dto.response.OrderTimelineResponseDto;
@@ -191,23 +193,32 @@ public class OrderServiceImpl implements OrderService {
         return value == null ? "" : value.replaceAll("[^0-9]", "");
     }
 
+    /** Tuỳ chọn đặt đơn: nguồn đơn (WEBSITE | ADMIN), id người tạo, khoản trừ cố định (đơn đổi hàng). */
+    private record PlaceOpts(String source, Long createdId, BigDecimal credit) {
+        boolean admin() {
+            return "ADMIN".equals(source);
+        }
+    }
+
+    /** Kết quả giữ chỗ tồn kho cho một nhóm dòng hàng. */
+    private record LineBuild(List<OrderItemEntity> items, BigDecimal subtotal, BigDecimal productDiscount,
+                             boolean hasPreOrder) {
+    }
+
     /** Lõi đặt hàng dùng chung cho khách đăng nhập (userId != null) và khách vãng lai (userId = null). */
     private OrderResponseDto placeOrder(Long userId, String guestEmail, String guestCartId, CustomerAddressEntity address,
                                         String paymentMethod, String shippingMethod, String voucherCode, String noteText,
                                         List<OrderItemRequestDto> requestItems) {
-        // Gộp trùng skuId (client lỡ gửi 2 dòng cùng 1 SKU) để chỉ giữ chỗ tồn kho + tạo 1 dòng duy nhất.
-        Map<Long, Integer> qtyBySku = new LinkedHashMap<>();
-        for (OrderItemRequestDto line : requestItems) {
-            qtyBySku.merge(line.getSkuId(), line.getQuantity(), Integer::sum);
-        }
+        return placeOrder(userId, guestEmail, guestCartId, address, paymentMethod, shippingMethod, voucherCode, noteText,
+                requestItems, new PlaceOpts("WEBSITE", userId, BigDecimal.ZERO));
+    }
 
+    /** Giữ chỗ tồn kho + snapshot dòng hàng. Mọi thay đổi nằm trong transaction của caller: lỗi giữa chừng -> rollback hết. */
+    private LineBuild reserveLines(Map<Long, Integer> qtyBySku) {
         List<OrderItemEntity> itemEntities = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal productDiscount = BigDecimal.ZERO;
         boolean hasPreOrderLine = false;
-        // Mỗi lần reserveStock/tạo dòng hàng đều nằm trong transaction này: nếu 1 SKU giữa chừng
-        // không đủ hàng và ném exception, Spring sẽ rollback TOÀN BỘ (kể cả các reserveStock đã chạy
-        // trước đó trong vòng lặp) - không cần tự tay nhả lại tồn kho ở đây.
         for (Map.Entry<Long, Integer> line : qtyBySku.entrySet()) {
             Long skuId = line.getKey();
             int qty = line.getValue();
@@ -224,9 +235,6 @@ public class OrderServiceImpl implements OrderService {
                 hasPreOrderLine = true;
             }
             if (reserved == 0) {
-                // args khớp placeholder {0} của messages_vi/en (INSUFFICIENT_STOCK) - available() đọc
-                // TRƯỚC lần reserveStock vừa thất bại nên chỉ mang tính tham khảo (có thể vừa đổi do
-                // request khác), đủ tốt cho thông báo UX, không cần chính xác tuyệt đối tức thời.
                 throw BusinessException.badRequest(ErrorCode.INSUFFICIENT_STOCK,
                         "Sản phẩm \"" + sku.getName() + "\" không đủ hàng, chỉ còn " + sku.available(),
                         sku.available());
@@ -234,12 +242,36 @@ public class OrderServiceImpl implements OrderService {
 
             ProductEntity product = products.findOne(sku.getProductId());
             BigDecimal unitPrice = sku.effectivePrice();
-            itemEntities.add(new OrderItemEntity(null, sku.getProductId(), skuId,
+            OrderItemEntity snap = new OrderItemEntity(null, sku.getProductId(), skuId,
                     product != null ? product.getName() : sku.getName(),
-                    product != null ? product.getThumbnailUrl() : null, qty, unitPrice));
+                    product != null ? product.getThumbnailUrl() : null, qty, unitPrice);
+            snap.setSkuCode(sku.getSkuCode());
+            snap.setSizeLabel(sku.getSizeLabel());
+            snap.setMetalColorLabel(sku.getMetalColorLabel());
+            itemEntities.add(snap);
             subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(qty)));
             productDiscount = productDiscount.add(
                     promotionPricing.unitDiscount(sku.getProductId(), unitPrice).multiply(BigDecimal.valueOf(qty)));
+        }
+        return new LineBuild(itemEntities, subtotal, productDiscount, hasPreOrderLine);
+    }
+
+    private OrderResponseDto placeOrder(Long userId, String guestEmail, String guestCartId, CustomerAddressEntity address,
+                                        String paymentMethod, String shippingMethod, String voucherCode, String noteText,
+                                        List<OrderItemRequestDto> requestItems, PlaceOpts opts) {
+        // Gộp trùng skuId (client lỡ gửi 2 dòng cùng 1 SKU) để chỉ giữ chỗ tồn kho + tạo 1 dòng duy nhất.
+        Map<Long, Integer> qtyBySku = new LinkedHashMap<>();
+        for (OrderItemRequestDto line : requestItems) {
+            qtyBySku.merge(line.getSkuId(), line.getQuantity(), Integer::sum);
+        }
+        LineBuild built = reserveLines(qtyBySku);
+        List<OrderItemEntity> itemEntities = built.items();
+        BigDecimal subtotal = built.subtotal();
+        BigDecimal productDiscount = built.productDiscount();
+        boolean hasPreOrderLine = built.hasPreOrder();
+        if (opts.credit() != null && opts.credit().signum() > 0) {
+            // Đơn đổi hàng: giá trị hàng đã trả được trừ vào đơn mới (không vượt quá tiền hàng còn phải trả).
+            productDiscount = productDiscount.add(opts.credit().min(subtotal.subtract(productDiscount)));
         }
 
         VoucherEntity voucher = null;
@@ -257,6 +289,8 @@ public class OrderServiceImpl implements OrderService {
         OrderEntity order = new OrderEntity(userId, paymentMethod, shippingMethod, address,
                 subtotal, productDiscount, voucherDiscount, BigDecimal.ZERO, appliedVoucherCode, noteText);
         order.setGuestEmail(guestEmail);
+        order.setCreatedId(opts.createdId());
+        order.setSource(opts.source());
         orders.create(order);
 
         for (OrderItemEntity item : itemEntities) {
@@ -265,10 +299,11 @@ public class OrderServiceImpl implements OrderService {
         }
 
         orderTimelines.create(new OrderTimelineEntity(order.getId(), OrderEntity.PENDING,
-                hasPreOrderLine ? "Đơn hàng được tạo (có sản phẩm đặt trước)" : "Đơn hàng được tạo", "CUSTOMER"));
+                (opts.admin() ? "Nhân viên tạo đơn hàng" : "Đơn hàng được tạo")
+                        + (hasPreOrderLine ? " (có sản phẩm đặt trước)" : ""), opts.admin() ? "ADMIN" : "CUSTOMER"));
 
         // Dọn khỏi giỏ của khách CHỈ những dòng vừa đặt thành công; dòng chưa mua giữ nguyên.
-        CartEntity userCart = userId != null ? carts.findByUserId(userId)
+        CartEntity userCart = opts.admin() ? null : userId != null ? carts.findByUserId(userId)
                 : (guestCartId == null || guestCartId.isBlank() ? null : carts.findByGuestId(guestCartId.trim()));
         if (userCart != null) {
             for (OrderItemEntity item : itemEntities) {
@@ -345,6 +380,7 @@ public class OrderServiceImpl implements OrderService {
         PaymentEntity payment = payments.findByOrderId(o.getId());
         OrderResponseDto dto = OrderResponseDto.from(o, payment != null ? payment.getId() : null, items, timeline);
         dto.setDeliveredAt(deliveredAtOf(orderTimelines.findByOrderId(o.getId())));
+        dto.setCreatedById(o.getCreatedId());
         if (o.getUserId() != null) {
             UserEntity user = users.findOne(o.getUserId());
             if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
@@ -436,9 +472,6 @@ public class OrderServiceImpl implements OrderService {
                     "orderType không hợp lệ: " + q.orderType() + " (ASC | DESC)", q.orderType());
         }
         String source = normToken(q.source());
-        if (!source.isEmpty() && !source.equals("website") && !source.equals("online")) {
-            return List.of(); // mọi đơn hiện đều đặt từ website
-        }
         Date from = parseAdminDate(q.fromDate(), false);
         Date to = parseAdminDate(q.toDate(), true);
         String ship = normToken(q.shippingMethod());
@@ -452,15 +485,21 @@ public class OrderServiceImpl implements OrderService {
                     skuIds.add(sku.getId());
                 }
             }
-            if (skuIds.isEmpty()) {
-                return List.of();
-            }
         }
         List<OrderEntity> out = new ArrayList<>();
         for (OrderEntity o : orders.searchAdmin(upperOrEmpty(q.status()), upperOrEmpty(q.paymentStatus()),
                 trimOrEmpty(q.search()))) {
             if (!ship.isEmpty() && !ship.equals(normToken(o.getShippingMethod()))) {
                 continue;
+            }
+            if (q.createdById() != null && !q.createdById().equals(o.getCreatedId())) {
+                continue;
+            }
+            if (!source.isEmpty()) {
+                String os = o.getSource() == null ? "website" : normToken(o.getSource());
+                if (!source.equals(os) && !(source.equals("online") && os.equals("website"))) {
+                    continue;
+                }
             }
             if (!province.isEmpty() && (o.getShipProvince() == null
                     || !o.getShipProvince().toLowerCase(java.util.Locale.ROOT).contains(province))) {
@@ -474,7 +513,10 @@ public class OrderServiceImpl implements OrderService {
             }
             if (skuIds != null) {
                 final Set<Long> wanted = skuIds;
-                if (orderItems.findByOrderId(o.getId()).stream().noneMatch(i -> wanted.contains(i.getSkuId()))) {
+                // Ưu tiên SKU snapshot trên dòng đơn (đổi mã SKU sau không làm mất đơn cũ); đơn cũ chưa có snapshot -> SKU hiện tại.
+                if (orderItems.findByOrderId(o.getId()).stream().noneMatch(i -> i.getSkuCode() != null
+                        ? i.getSkuCode().toLowerCase(java.util.Locale.ROOT).contains(skuKw)
+                        : wanted.contains(i.getSkuId()))) {
                     continue;
                 }
             }
@@ -714,6 +756,367 @@ public class OrderServiceImpl implements OrderService {
                 "Hoàn tiền " + amount + " (đã hoàn " + fresh.getRefundedAmount() + "/" + fresh.getGrandTotal() + ") - Lý do: " + reason,
                 "ADMIN"));
         return toDto(fresh);
+    }
+
+    // ============================== Admin OMS nâng cao: tạo / sửa / nhân bản / xác nhận thanh toán ==============================
+
+    private static final Set<String> ADMIN_EDITABLE = Set.of(OrderEntity.PENDING, OrderEntity.CONFIRMED);
+
+    private static String nz(String v, String fallback) {
+        return v == null || v.isBlank() ? fallback : v.trim();
+    }
+
+    private static String money(BigDecimal v) {
+        return String.valueOf((v == null ? BigDecimal.ZERO : v).longValue());
+    }
+
+    private static Map<Long, Integer> adminQty(OmsRequestDtos.OrderUpsert req) {
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Đơn hàng cần ít nhất một sản phẩm");
+        }
+        Map<Long, Integer> qty = new LinkedHashMap<>();
+        for (OmsRequestDtos.OrderUpsert.Item i : req.getItems()) {
+            Long sku = i.sku();
+            if (sku == null || i.getQuantity() == null || i.getQuantity() < 1) {
+                throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                        "Mỗi dòng hàng cần variationId và quantity >= 1");
+            }
+            qty.merge(sku, i.getQuantity(), Integer::sum);
+        }
+        return qty;
+    }
+
+    private static String firstCoupon(OmsRequestDtos.OrderUpsert req) {
+        if (req.getCouponCodes() != null) {
+            for (String c : req.getCouponCodes()) {
+                if (c != null && !c.isBlank()) {
+                    return c.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void requireCod(String paymentMethod) {
+        if (paymentMethod != null && !paymentMethod.isBlank() && !"COD".equalsIgnoreCase(paymentMethod.trim())) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Hiện chỉ hỗ trợ thanh toán COD");
+        }
+    }
+
+    private static String fullName(String lastName, String firstName) {
+        return (nz(lastName, "") + " " + nz(firstName, "")).trim();
+    }
+
+    private CustomerAddressEntity shipSnapshot(OrderEntity o) {
+        CustomerAddressEntity a = new CustomerAddressEntity();
+        a.setRecipientName(o.getShipRecipientName());
+        a.setPhone(o.getShipPhone());
+        a.setProvince(o.getShipProvince());
+        a.setDistrict(o.getShipDistrict());
+        a.setWard(o.getShipWard());
+        a.setAddressLine(o.getShipAddressLine());
+        return a;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Object> quoteForAdmin(OmsRequestDtos.OrderUpsert req) {
+        return computeQuote(adminQty(req), req.getCouponCodes(), req.getPaymentMethod());
+    }
+
+    /** Báo giá không giữ chỗ tồn: cùng công thức placeOrder (đơn giá hiệu lực - khuyến mãi sản phẩm - voucher), phí ship 0. */
+    private Map<String, Object> computeQuote(Map<Long, Integer> qtyBySku, List<String> couponCodes, String paymentMethod) {
+        List<Map<String, Object>> lines = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal productDiscount = BigDecimal.ZERO;
+        StringBuilder fp = new StringBuilder();
+        for (Map.Entry<Long, Integer> e : qtyBySku.entrySet()) {
+            ProductSkuEntity sku = productSkus.findOne(e.getKey());
+            if (!sellable(sku)) {
+                throw new ResourceNotFoundException("Sản phẩm", "ProductSku", e.getKey());
+            }
+            int qty = e.getValue();
+            if (sku.available() < qty && !preOrder.appliesTo(sku)) {
+                warnings.add("INSUFFICIENT_STOCK:" + sku.getSkuCode());
+            }
+            ProductEntity product = products.findOne(sku.getProductId());
+            BigDecimal unit = sku.effectivePrice();
+            BigDecimal unitDiscount = promotionPricing.unitDiscount(sku.getProductId(), unit);
+            BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
+            BigDecimal lineDiscount = unitDiscount.multiply(BigDecimal.valueOf(qty));
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("variationId", String.valueOf(e.getKey()));
+            m.put("productId", String.valueOf(sku.getProductId()));
+            m.put("productName", product != null ? product.getName() : sku.getName());
+            m.put("variationName", sku.getName());
+            m.put("skuCode", sku.getSkuCode());
+            m.put("image", product != null ? product.getThumbnailUrl() : null);
+            m.put("unitPrice", money(unit));
+            m.put("salePrice", money(unit.subtract(unitDiscount)));
+            m.put("quantity", qty);
+            m.put("lineTotal", money(lineTotal));
+            m.put("discountAmount", money(lineDiscount));
+            m.put("finalAmount", money(lineTotal.subtract(lineDiscount)));
+            m.put("lineType", "PRODUCT");
+            m.put("pricingMode", "STANDARD");
+            lines.add(m);
+            subtotal = subtotal.add(lineTotal);
+            productDiscount = productDiscount.add(lineDiscount);
+            fp.append(e.getKey()).append(':').append(qty).append(':').append(unit.longValue()).append(':')
+                    .append(lineDiscount.longValue()).append(';');
+        }
+        BigDecimal payable = subtotal.subtract(productDiscount);
+        BigDecimal voucherDiscount = BigDecimal.ZERO;
+        List<String> appliedCodes = new ArrayList<>();
+        List<Map<String, Object>> outcomes = new ArrayList<>();
+        boolean voucherTaken = false;
+        if (couponCodes != null) {
+            for (String raw : couponCodes) {
+                if (raw == null || raw.isBlank()) {
+                    continue;
+                }
+                String code = raw.trim().toUpperCase(java.util.Locale.ROOT);
+                Map<String, Object> outcome = new LinkedHashMap<>();
+                outcome.put("normalizedCouponCode", code);
+                if (voucherTaken) {
+                    outcome.put("status", "REJECTED");
+                    outcome.put("reasonCodes", List.of("ONLY_ONE_VOUCHER_ALLOWED"));
+                } else {
+                    try {
+                        VoucherEntity v = voucherService.validate(code, payable);
+                        voucherDiscount = v.computeDiscount(payable);
+                        voucherTaken = true;
+                        appliedCodes.add(v.getCode());
+                        outcome.put("status", "APPLIED");
+                        outcome.put("reasonCodes", List.of());
+                        fp.append("V:").append(v.getCode()).append(':').append(voucherDiscount.longValue()).append(';');
+                    } catch (BusinessException ex) {
+                        outcome.put("status", "REJECTED");
+                        outcome.put("reasonCodes", List.of(String.valueOf(ex.getCode())));
+                        warnings.add("COUPON_REJECTED:" + code);
+                    }
+                }
+                outcomes.add(outcome);
+            }
+        }
+        BigDecimal grand = payable.subtract(voucherDiscount);
+        fp.append("T:").append(grand.longValue());
+        Map<String, Object> shipping = new LinkedHashMap<>();
+        shipping.put("baseFeeMinor", "0");
+        shipping.put("discountMinor", "0");
+        shipping.put("customerFeeMinor", "0");
+        Map<String, Object> pricing = new LinkedHashMap<>();
+        pricing.put("subtotal", money(subtotal));
+        pricing.put("shippingFee", "0");
+        pricing.put("discountTotal", money(productDiscount.add(voucherDiscount)));
+        pricing.put("taxTotal", "0");
+        pricing.put("grandTotal", money(grand));
+        pricing.put("totalPromotionSpend", money(productDiscount.add(voucherDiscount)));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("pricingEvaluationId", "PE-" + sha256(fp.toString()).substring(0, 24));
+        out.put("couponCodes", appliedCodes);
+        out.put("couponOutcomes", outcomes);
+        out.put("shipping", shipping);
+        out.put("paymentMethod", nz(paymentMethod, "COD"));
+        out.put("items", lines);
+        out.put("pricing", pricing);
+        out.put("warnings", warnings);
+        return out;
+    }
+
+    @Transactional
+    @Override
+    public OrderResponseDto createByAdmin(OmsRequestDtos.OrderUpsert req, Long adminId) {
+        return idempotent("A:" + adminId, req.getIdempotencyKey(), req, () -> createByAdminNew(req, adminId));
+    }
+
+    @SuppressWarnings("unchecked")
+    private OrderResponseDto createByAdminNew(OmsRequestDtos.OrderUpsert req, Long adminId) {
+        requireCod(req.getPaymentMethod());
+        if (req.getReceiverPhone() == null || req.getReceiverPhone().isBlank()) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Cần số điện thoại người nhận");
+        }
+        if (req.getAddressLine() == null || req.getAddressLine().isBlank()) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Cần địa chỉ giao hàng");
+        }
+        Map<Long, Integer> qty = adminQty(req);
+        Map<String, Object> quote = computeQuote(qty, req.getCouponCodes(), "COD");
+        String quotedGrand = String.valueOf(((Map<String, Object>) quote.get("pricing")).get("grandTotal"));
+        if ((req.getPricingEvaluationId() != null && !req.getPricingEvaluationId().isBlank()
+                && !req.getPricingEvaluationId().equals(quote.get("pricingEvaluationId")))
+                || (req.getExpectedGrandTotalMinor() != null
+                && !String.valueOf(req.getExpectedGrandTotalMinor()).equals(quotedGrand))) {
+            throw BusinessException.conflict("ORDER_PRICING_CHANGED",
+                    "Giá đã thay đổi so với báo giá, vui lòng báo giá lại (tổng mới: " + quotedGrand + ")", quotedGrand);
+        }
+        String phone = PhoneUtil.normalize(req.getReceiverPhone().trim());
+        UserEntity customer = users.findByPhone(phone);
+        CustomerAddressEntity ship = new CustomerAddressEntity();
+        String name = fullName(req.getLastName(), req.getFirstName());
+        ship.setRecipientName(name.isEmpty() ? phone : name);
+        ship.setPhone(phone);
+        ship.setProvince(nz(req.getProvinceName(), "-"));
+        ship.setDistrict(nz(req.getDistrictName(), "-"));
+        ship.setWard(nz(req.getWardName(), "-"));
+        ship.setAddressLine(req.getAddressLine().trim());
+        List<OrderItemRequestDto> items = new ArrayList<>();
+        qty.forEach((sku, q) -> items.add(new OrderItemRequestDto(sku, q)));
+        return placeOrder(customer != null ? customer.getId() : null,
+                customer == null ? nz(req.getContactEmail(), null) : null, null, ship, "COD",
+                nz(req.getShippingMethod(), "STANDARD"), firstCoupon(req), req.getNote(), items,
+                new PlaceOpts("ADMIN", adminId, BigDecimal.ZERO));
+    }
+
+    @Transactional
+    @Override
+    public OrderResponseDto updateByAdmin(String code, OmsRequestDtos.OrderUpsert req, Long adminId) {
+        OrderEntity order = adminOrder(code);
+        if (!ADMIN_EDITABLE.contains(order.getStatus())) {
+            throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
+                    "Chỉ sửa được đơn PENDING/CONFIRMED (hiện tại: " + order.getStatus() + ")",
+                    order.getStatus(), order.getStatus());
+        }
+        requireCod(req.getPaymentMethod());
+        if (req.getReceiverPhone() != null && !req.getReceiverPhone().isBlank()) {
+            order.setShipPhone(PhoneUtil.normalize(req.getReceiverPhone().trim()));
+        }
+        if (req.getFirstName() != null || req.getLastName() != null) {
+            String name = fullName(req.getLastName(), req.getFirstName());
+            if (!name.isEmpty()) {
+                order.setShipRecipientName(name);
+            }
+        }
+        if (req.getProvinceName() != null && !req.getProvinceName().isBlank()) {
+            order.setShipProvince(req.getProvinceName().trim());
+        }
+        if (req.getDistrictName() != null && !req.getDistrictName().isBlank()) {
+            order.setShipDistrict(req.getDistrictName().trim());
+        }
+        if (req.getWardName() != null && !req.getWardName().isBlank()) {
+            order.setShipWard(req.getWardName().trim());
+        }
+        if (req.getAddressLine() != null && !req.getAddressLine().isBlank()) {
+            order.setShipAddressLine(req.getAddressLine().trim());
+        }
+        if (req.getShippingMethod() != null && !req.getShippingMethod().isBlank()) {
+            order.setShippingMethod(req.getShippingMethod().trim());
+        }
+        if (req.getNote() != null) {
+            order.setNote(req.getNote().isBlank() ? null : req.getNote().trim());
+        }
+        if (req.getContactEmail() != null && order.getUserId() == null) {
+            order.setGuestEmail(req.getContactEmail().isBlank() ? null : req.getContactEmail().trim());
+        }
+        boolean itemsChanged = false;
+        if (req.getItems() != null && !req.getItems().isEmpty()) {
+            itemsChanged = replaceItems(order, adminQty(req));
+        }
+        order.touch();
+        order.setUpdatedId(adminId);
+        orders.update(order);
+        orderTimelines.create(new OrderTimelineEntity(order.getId(), order.getStatus(),
+                itemsChanged ? "Nhân viên chỉnh sửa thông tin và sản phẩm của đơn" : "Nhân viên chỉnh sửa thông tin đơn",
+                "ADMIN"));
+        return toDto(orders.findOne(order.getId()));
+    }
+
+    /** Đổi danh sách sản phẩm của đơn PENDING: nhả giữ chỗ cũ, giữ chỗ mới, tính lại tiền (voucher kiểm tra lại). */
+    private boolean replaceItems(OrderEntity order, Map<Long, Integer> newQty) {
+        List<OrderItemEntity> old = orderItems.findByOrderId(order.getId());
+        Map<Long, Integer> current = new LinkedHashMap<>();
+        for (OrderItemEntity it : old) {
+            current.merge(it.getSkuId(), it.getQuantity(), Integer::sum);
+        }
+        if (current.equals(newQty)) {
+            return false;
+        }
+        if (!OrderEntity.PENDING.equals(order.getStatus())) {
+            throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
+                    "Chỉ đổi sản phẩm khi đơn còn PENDING (hiện tại: " + order.getStatus() + ")",
+                    order.getStatus(), order.getStatus());
+        }
+        for (OrderItemEntity it : old) {
+            productSkus.releaseStock(it.getSkuId(), it.getQuantity());
+            orderItems.delete(it);
+        }
+        LineBuild built = reserveLines(newQty);
+        for (OrderItemEntity item : built.items()) {
+            item.setOrderId(order.getId());
+            orderItems.create(item);
+        }
+        BigDecimal voucherDiscount = BigDecimal.ZERO;
+        String voucherCode = order.getAppliedVoucherCode();
+        if (voucherCode != null && !voucherCode.isBlank()) {
+            voucherService.releaseUsage(voucherCode);
+            BigDecimal payable = built.subtotal().subtract(built.productDiscount());
+            VoucherEntity v = voucherService.validate(voucherCode, payable);
+            voucherDiscount = v.computeDiscount(payable);
+            voucherService.applyUsage(v.getId(), v.getCode());
+        }
+        order.setSubtotal(built.subtotal());
+        order.setProductDiscount(built.productDiscount());
+        order.setVoucherDiscount(voucherDiscount);
+        order.setGrandTotal(built.subtotal().subtract(built.productDiscount()).subtract(voucherDiscount)
+                .add(order.getShippingFee() == null ? BigDecimal.ZERO : order.getShippingFee()));
+        return true;
+    }
+
+    @Transactional
+    @Override
+    public OrderResponseDto confirmPaymentByAdmin(String code, String note) {
+        OrderEntity order = adminOrder(code);
+        if (OrderEntity.CANCELLED.equals(order.getStatus()) || OrderEntity.RETURNED.equals(order.getStatus())) {
+            throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
+                    "Không xác nhận thanh toán cho đơn " + order.getStatus(), order.getStatus(), OrderEntity.PAID);
+        }
+        if (!OrderEntity.UNPAID.equals(order.getPaymentStatus())) {
+            throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
+                    "Đơn đã ở trạng thái thanh toán " + order.getPaymentStatus(), order.getPaymentStatus(), OrderEntity.PAID);
+        }
+        order.setPaymentStatus(OrderEntity.PAID);
+        order.touch();
+        orders.update(order);
+        orderTimelines.create(new OrderTimelineEntity(order.getId(), order.getStatus(),
+                "Xác nhận đã thanh toán" + (note == null || note.isBlank() ? "" : ": " + note.trim()), "ADMIN"));
+        return toDto(order);
+    }
+
+    @Transactional
+    @Override
+    public OrderResponseDto duplicateForAdmin(String sourceKey, boolean replaceSource, String cancelReason,
+                                              String cancelNote, Long adminId) {
+        OrderEntity src = adminOrder(sourceKey);
+        Map<Long, Integer> qty = new LinkedHashMap<>();
+        for (OrderItemEntity it : orderItems.findByOrderId(src.getId())) {
+            qty.merge(it.getSkuId(), it.getQuantity(), Integer::sum);
+        }
+        if (replaceSource) {
+            // Huỷ đơn nguồn trước để tồn kho giữ chỗ được trả lại cho đơn mới.
+            String reason = nz(cancelReason, "Sao chép sang đơn mới")
+                    + (cancelNote == null || cancelNote.isBlank() ? "" : " - " + cancelNote.trim());
+            cancelByAdmin(src.getCode(), reason);
+        }
+        List<OrderItemRequestDto> items = new ArrayList<>();
+        qty.forEach((sku, q) -> items.add(new OrderItemRequestDto(sku, q)));
+        OrderResponseDto created = placeOrder(src.getUserId(), src.getGuestEmail(), null, shipSnapshot(src), "COD",
+                src.getShippingMethod(), null, src.getNote(), items, new PlaceOpts("ADMIN", adminId, BigDecimal.ZERO));
+        orderTimelines.create(new OrderTimelineEntity(created.getId(), OrderEntity.PENDING,
+                "Sao chép từ đơn " + src.getCode(), "ADMIN"));
+        return toDto(orders.findOne(created.getId()));
+    }
+
+    @Transactional
+    @Override
+    public OrderResponseDto createExchangeOrder(String sourceKey, Map<Long, Integer> qtyBySku, BigDecimal credit,
+                                                String note, Long adminId) {
+        OrderEntity src = adminOrder(sourceKey);
+        List<OrderItemRequestDto> items = new ArrayList<>();
+        qtyBySku.forEach((sku, q) -> items.add(new OrderItemRequestDto(sku, q)));
+        OrderResponseDto created = placeOrder(src.getUserId(), src.getGuestEmail(), null, shipSnapshot(src), "COD",
+                src.getShippingMethod(), null, note, items,
+                new PlaceOpts("ADMIN", adminId, credit == null ? BigDecimal.ZERO : credit));
+        return toDto(orders.findOne(created.getId()));
     }
 
     /** Nhả tồn đã giữ chỗ và trả lượt dùng voucher (nếu đơn có áp voucher) khi đơn bị huỷ. */
