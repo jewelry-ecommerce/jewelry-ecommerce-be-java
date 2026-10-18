@@ -4,7 +4,7 @@ rem ======================================================================
 rem  reset-db.bat - XOA SACH database roi tao lai: 1. Table.sql roi 2. Data.sql
 rem
 rem  Chay: bam dup file nay, hoac go reset-db.bat trong cmd.
-rem  Cau hinh ket noi: config\db.config.bat
+rem  Cau hinh: config\db.config.bat (doi rieng tung may: config\db.config.local.bat)
 rem
 rem  - Chi chay voi DB tren chinh may nay (xem ALLOW_REMOTE trong config\db.config.bat).
 rem  - Bat go lai ten database truoc khi xoa.

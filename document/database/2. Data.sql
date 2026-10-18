@@ -23,7 +23,9 @@
 BEGIN;
 
 -- ===================== IDENTITY =====================
-INSERT INTO roles (name) VALUES ('ADMIN'), ('CUSTOMER'), ('CATALOG_MANAGER'), ('ORDER_MANAGER');
+-- ADMIN/CUSTOMER đã được migration V1 chèn sẵn trong "1. Table.sql" -> ON CONFLICT để chạy được ở cả 2 trường hợp.
+INSERT INTO roles (name) VALUES ('ADMIN'), ('CUSTOMER'), ('CATALOG_MANAGER'), ('ORDER_MANAGER')
+ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO users (phone, email, password_hash, full_name, enabled) VALUES
     ('0901234567', 'admin@pkjewelry.vn', '$2b$10$vvpsrB3Gg5cI73JTIzUQve.gR3tWn0KoBOabK8UKCXEpwtj0p6M.2', 'Quản trị viên', TRUE),
