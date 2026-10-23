@@ -1,0 +1,11 @@
+# Never commit credentials, uploaded media, build output or private keys.
+.env
+.env.*
+!.env.cloud.example
+*.pem
+*.key
+**/target/
+uploads/
+.idea/
+.vscode/
+*.log

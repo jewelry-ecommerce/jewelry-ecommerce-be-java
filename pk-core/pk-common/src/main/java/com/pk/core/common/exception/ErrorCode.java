@@ -3,6 +3,7 @@ package com.pk.core.common.exception;
 /** Mã lỗi trả về cho FE (trường `code` trong BaseRes.errors[], xem pk-common/common/web/ErrorDetailRes).
  * Gom một chỗ để không gõ chuỗi rải rác. */
 public final class ErrorCode {
+    public static final String UPLOAD_STORAGE_UNAVAILABLE = "UPLOAD_STORAGE_UNAVAILABLE";
 
     public static final String ACCOUNT_DISABLED = "ACCOUNT_DISABLED";
     public static final String BADGE_FLOW_LOCKED = "BADGE_FLOW_LOCKED";

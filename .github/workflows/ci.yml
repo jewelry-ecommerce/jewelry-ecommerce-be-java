@@ -1,0 +1,40 @@
+name: Java CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: java-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: '**/pom.xml'
+      - name: Build and run unit plus integration tests (isolated H2)
+        working-directory: pk-core
+        run: mvn -B -ntp verify "-Dtest=*Test,*IT" -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Upload runnable jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: jewelry-java-exec
+          path: pk-core/pk-service/target/*-exec.jar
+          retention-days: 3
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-test-results
+          path: pk-core/pk-unit-test/target/surefire-reports/
+          retention-days: 3
