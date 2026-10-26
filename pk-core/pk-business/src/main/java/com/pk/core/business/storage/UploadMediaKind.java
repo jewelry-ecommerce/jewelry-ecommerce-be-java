@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 public enum UploadMediaKind {
     PNG("png", "image/png", "IMAGE"), JPEG("jpg", "image/jpeg", "IMAGE"),
     GIF("gif", "image/gif", "IMAGE"), WEBP("webp", "image/webp", "IMAGE"),
+    SVG("svg", "image/svg+xml", "IMAGE"),
     MP4("mp4", "video/mp4", "VIDEO"), WEBM("webm", "video/webm", "VIDEO");
 
     public final String extension;

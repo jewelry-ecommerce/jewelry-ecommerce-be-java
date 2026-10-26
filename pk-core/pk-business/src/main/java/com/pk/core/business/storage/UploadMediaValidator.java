@@ -27,11 +27,21 @@ public class UploadMediaValidator {
         try (InputStream input = file.getInputStream()) {
             byte[] header = input.readNBytes(SIGNATURE_BYTES);
             UploadMediaKind kind = UploadMediaKind.detect(header, header.length);
-            if (kind == null) throw invalid("Định dạng không được hỗ trợ (png, jpg, gif, webp, mp4, webm)");
-            return kind;
+            if (kind != null) return kind;
+            if (isSvgCandidate(file)) {
+                SvgUploadValidator.validate(file);
+                return UploadMediaKind.SVG;
+            }
+            throw invalid("Định dạng không được hỗ trợ (png, jpg, gif, webp, svg, mp4, webm)");
         } catch (IOException failure) {
             throw invalid("Không đọc được file");
         }
+    }
+
+    private boolean isSvgCandidate(MultipartFile file) {
+        String name = originalName(file);
+        return "image/svg+xml".equalsIgnoreCase(file.getContentType())
+                || (name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(".svg"));
     }
 
     public static String originalName(MultipartFile file) {
