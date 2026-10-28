@@ -1,0 +1,9 @@
+# Caddy tự xin và gia hạn chứng chỉ HTTPS (Let's Encrypt) cho tên miền trong biến DOMAIN.
+# Cần: DOMAIN trỏ đúng về IP public của VM, và cổng 80, 443 đã mở (cả Security List của Oracle lẫn firewall trong VM).
+{$DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 12MB
+	}
+	reverse_proxy app:8080
+}

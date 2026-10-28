@@ -13,6 +13,8 @@ public class BusinessException extends RuntimeException {
     private final transient Object[] args;
     /** Danh sách đối tượng liên quan (VD header trùng lịch) -> BaseRes.dependencies cho FE. */
     private transient java.util.List<java.util.Map<String, Object>> dependencies;
+    /** Field gây lỗi (tuỳ chọn). */
+    private transient String field;
 
     public BusinessException(int status, String code, String message) {
         this(status, code, message, (Object[]) null);
@@ -83,5 +85,15 @@ public class BusinessException extends RuntimeException {
 
     public java.util.List<java.util.Map<String, Object>> getDependencies() {
         return dependencies;
+    }
+
+    /** Đường dẫn field gây lỗi (vd `config.items[0].imageUrl`) -> BaseRes.errors[].field cho FE. */
+    public BusinessException withField(String field) {
+        this.field = field;
+        return this;
+    }
+
+    public String getField() {
+        return field;
     }
 }

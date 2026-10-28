@@ -3,33 +3,30 @@ package com.pk.core.business.service.impl;
 import com.pk.core.business.service.FileStorageService;
 import com.pk.core.common.exception.BusinessException;
 import com.pk.core.common.exception.ErrorCode;
-import com.pk.core.model.constant.UrlConstant;
 import com.pk.core.model.dto.response.UploadResponseDto;
-import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.time.LocalDate;
-import java.util.UUID;
 
 /**
- * Lưu file lên đĩa cục bộ (mặc định D:/pk-uploads, đổi bằng biến môi trường UPLOAD_DIR). Tên file do server sinh (UUID) và
- * phần mở rộng suy ra từ NỘI DUNG file (magic bytes) nên không thể upload HTML/script giả làm ảnh.
+ * Upload ảnh/video/SVG qua {@link UploadStorage} (một thư mục gốc, tách folder images/ và videos/). Tên file do server sinh (UUID)
+ * và phần mở rộng suy ra từ NỘI DUNG file (magic bytes) nên không thể upload HTML/script giả làm ảnh. SVG phải qua {@link SvgSafety}.
  */
 @Service
+@RequiredArgsConstructor
 public class LocalFileStorageService implements FileStorageService {
 
     private enum Kind {
         PNG("png", "image/png", "IMAGE"), JPEG("jpg", "image/jpeg", "IMAGE"), GIF("gif", "image/gif", "IMAGE"),
-        WEBP("webp", "image/webp", "IMAGE"), MP4("mp4", "video/mp4", "VIDEO"), WEBM("webm", "video/webm", "VIDEO");
+        WEBP("webp", "image/webp", "IMAGE"), SVG("svg", "image/svg+xml", "IMAGE"),
+        MP4("mp4", "video/mp4", "VIDEO"), WEBM("webm", "video/webm", "VIDEO");
 
         final String ext;
         final String contentType;
@@ -40,24 +37,16 @@ public class LocalFileStorageService implements FileStorageService {
             this.contentType = contentType;
             this.type = type;
         }
+
+        UploadStorage.Folder folder() {
+            return "VIDEO".equals(type) ? UploadStorage.Folder.VIDEOS : UploadStorage.Folder.IMAGES;
+        }
     }
 
-    @Value("${app.upload.dir:D:/pk-uploads}")
-    private String dir;
-
-    @Value("${app.upload.public-base-url:}")
-    private String publicBaseUrl;
+    private final UploadStorage storage;
 
     @Value("${app.upload.max-bytes:10485760}")
     private long maxBytes;
-
-    private Path root;
-
-    @PostConstruct
-    void init() throws IOException {
-        root = Paths.get(dir).toAbsolutePath().normalize();
-        Files.createDirectories(root);
-    }
 
     @Override
     public UploadResponseDto store(MultipartFile file) {
@@ -76,30 +65,56 @@ public class LocalFileStorageService implements FileStorageService {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Không đọc được file");
         }
         Kind kind = sniff(head, read);
+        byte[] svg = null;
+        if (kind == null && looksLikeText(head, read)) {
+            svg = readSvg(file);
+            kind = Kind.SVG;
+        }
         if (kind == null) {
             throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
-                    "Định dạng không được hỗ trợ (cho phép: png, jpg, gif, webp, mp4, webm)");
+                    "Định dạng không được hỗ trợ (cho phép: png, jpg, gif, webp, svg tĩnh, mp4, webm)");
         }
-        LocalDate today = LocalDate.now();
-        String relative = today.getYear() + "/" + String.format("%02d", today.getMonthValue()) + "/"
-                + UUID.randomUUID() + "." + kind.ext;
-        Path target = root.resolve(relative).normalize();
-        if (!target.startsWith(root)) {
-            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Đường dẫn lưu không hợp lệ");
-        }
-        try {
-            Files.createDirectories(target.getParent());
-            try (InputStream in = file.getInputStream()) {
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException ex) {
+        String key;
+        try (InputStream in = svg != null ? new ByteArrayInputStream(svg) : file.getInputStream()) {
+            key = storage.save(kind.folder(), kind.ext, in);
+        } catch (IOException | IllegalStateException ex) {
             throw new IllegalStateException("Không ghi được file upload", ex);
         }
-        String base = publicBaseUrl == null ? "" : publicBaseUrl.trim().replaceAll("/+$", "");
-        String url = base + UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlConstant.Storefront.FILES + "/" + relative;
         String original = file.getOriginalFilename() == null ? null : Paths.get(file.getOriginalFilename()).getFileName().toString();
-        return new UploadResponseDto(url, relative.substring(relative.lastIndexOf('/') + 1), original, file.getSize(),
+        return new UploadResponseDto(storage.publicUrl(key), key.substring(key.lastIndexOf('/') + 1), original, file.getSize(),
                 kind.contentType, kind.type);
+    }
+
+    /** Đọc toàn bộ file text (đã giới hạn kích thước) và bắt buộc qua chính sách SVG; không phải SVG thì coi là định dạng không hỗ trợ. */
+    private static byte[] readSvg(MultipartFile file) {
+        if (file.getSize() > SvgSafety.MAX_BYTES) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "Định dạng không được hỗ trợ (cho phép: png, jpg, gif, webp, svg tĩnh, mp4, webm)");
+        }
+        byte[] all;
+        try {
+            all = file.getBytes();
+        } catch (IOException ex) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Không đọc được file");
+        }
+        if (!SvgSafety.looksLikeSvg(all)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+                    "Định dạng không được hỗ trợ (cho phép: png, jpg, gif, webp, svg tĩnh, mp4, webm)");
+        }
+        SvgSafety.validate(all);
+        return all;
+    }
+
+    /** Bắt đầu bằng BOM UTF-8 hoặc khoảng trắng rồi '<' - dấu hiệu của XML/SVG (không phải nhị phân). */
+    private static boolean looksLikeText(byte[] b, int n) {
+        int i = 0;
+        if (n >= 3 && (b[0] & 0xFF) == 0xEF && (b[1] & 0xFF) == 0xBB && (b[2] & 0xFF) == 0xBF) {
+            i = 3;
+        }
+        while (i < n && (b[i] == ' ' || b[i] == '\t' || b[i] == '\r' || b[i] == '\n')) {
+            i++;
+        }
+        return i < n && b[i] == '<';
     }
 
     private static Kind sniff(byte[] b, int n) {

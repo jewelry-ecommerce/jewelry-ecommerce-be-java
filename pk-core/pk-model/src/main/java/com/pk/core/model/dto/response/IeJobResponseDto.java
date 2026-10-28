@@ -17,6 +17,12 @@ public record IeJobResponseDto(Long jobId, Long id, String jobType, String entit
                 iso(j.getFinishedAt()), iso(j.getCreatedDate()));
     }
 
+    /** Bản sao với `fileUrl` khác (link tải có chữ ký thay cho key lưu trữ). */
+    public IeJobResponseDto withFileUrl(String url) {
+        return new IeJobResponseDto(jobId, id, jobType, entityType, status, fileName, url, errorMessage, totalRows,
+                successRows, failedRows, referenceType, referenceId, startedAt, finishedAt, createdAt);
+    }
+
     private static String iso(Date d) {
         return d == null ? null : java.time.Instant.ofEpochMilli(d.getTime()).toString();
     }

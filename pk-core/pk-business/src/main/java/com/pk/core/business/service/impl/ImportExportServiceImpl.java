@@ -11,6 +11,7 @@ import com.pk.core.common.web.PageResponse;
 import com.pk.core.model.dto.request.AdminCreateProductRequestDto;
 import com.pk.core.model.dto.request.AdminSkuRequestDto;
 import com.pk.core.model.dto.request.IeProductExportRequestDto;
+import com.pk.core.model.dto.response.IeFileDto;
 import com.pk.core.model.dto.response.IeJobResponseDto;
 import com.pk.core.model.dto.response.IeResultRowDto;
 import com.pk.core.model.dto.response.ProductResponseDto;
@@ -52,6 +53,7 @@ public class ImportExportServiceImpl implements ImportExportService {
 
     private final ImportExportJobStore store;
     private final ImportExportFileStore files;
+    private final PrivateFileLinks links;
     private final ProductService productService;
 
     @Override
@@ -97,7 +99,7 @@ public class ImportExportServiceImpl implements ImportExportService {
         } catch (Exception ex) {
             store.finish(job, ImportExportJobEntity.FAILED, message(ex), 0, 0, 0, null);
         }
-        return IeJobResponseDto.from(store.job(job.getId()));
+        return dto(store.job(job.getId()));
     }
 
     private List<ProductResponseDto> collect(IeProductExportRequestDto r) {
@@ -189,7 +191,7 @@ public class ImportExportServiceImpl implements ImportExportService {
         List<List<String>> table = CsvSupport.parse(new String(bytes, StandardCharsets.UTF_8));
         if (table.isEmpty()) {
             store.finish(job, ImportExportJobEntity.FAILED, "File rỗng", 0, 0, 0, url);
-            return IeJobResponseDto.from(store.job(job.getId()));
+            return dto(store.job(job.getId()));
         }
         Map<String, Integer> col = new HashMap<>();
         List<String> header = table.get(0);
@@ -207,12 +209,12 @@ public class ImportExportServiceImpl implements ImportExportService {
         }
         if (!missing.isEmpty()) {
             store.finish(job, ImportExportJobEntity.FAILED, "Thiếu cột bắt buộc: " + String.join(", ", missing), 0, 0, 0, url);
-            return IeJobResponseDto.from(store.job(job.getId()));
+            return dto(store.job(job.getId()));
         }
         int total = table.size() - 1;
         if (total > MAX_IMPORT_ROWS) {
             store.finish(job, ImportExportJobEntity.FAILED, "Tối đa " + MAX_IMPORT_ROWS + " dòng mỗi lần import", total, 0, 0, url);
-            return IeJobResponseDto.from(store.job(job.getId()));
+            return dto(store.job(job.getId()));
         }
         int ok = 0;
         int failed = 0;
@@ -231,7 +233,7 @@ public class ImportExportServiceImpl implements ImportExportService {
         boolean allFailed = total > 0 && ok == 0;
         store.finish(job, allFailed ? ImportExportJobEntity.FAILED : ImportExportJobEntity.DONE,
                 allFailed ? "Tất cả " + total + " dòng đều lỗi" : null, total, ok, failed, url);
-        return IeJobResponseDto.from(store.job(job.getId()));
+        return dto(store.job(job.getId()));
     }
 
     /** @return mô tả hành động đã làm (CREATED_PRODUCT | ADDED_SKU | UPDATED_SKU). */
@@ -402,7 +404,7 @@ public class ImportExportServiceImpl implements ImportExportService {
                 .filter(j -> s.isEmpty() || s.equals(j.getStatus()))
                 .filter(j -> rt.isEmpty() || rt.equalsIgnoreCase(j.getReferenceType()))
                 .filter(j -> rid.isEmpty() || rid.equalsIgnoreCase(j.getReferenceId()))
-                .map(IeJobResponseDto::from).toList();
+                .map(this::dto).toList();
         return PageResponse.paginate(all, page, take);
     }
 
@@ -412,7 +414,41 @@ public class ImportExportServiceImpl implements ImportExportService {
         if (j == null) {
             throw new ResourceNotFoundException("Tác vụ", "Job", jobId);
         }
-        return IeJobResponseDto.from(j);
+        return dto(j);
+    }
+
+    /** Job trả cho FE: nếu có file thì `fileUrl` là link ký có hạn (không lộ đường dẫn lưu trữ, không công khai). */
+    private IeJobResponseDto dto(ImportExportJobEntity j) {
+        IeJobResponseDto d = IeJobResponseDto.from(j);
+        return j.getFileUrl() == null || j.getFileUrl().isBlank() ? d : d.withFileUrl(links.importExportUrl(j.getId()));
+    }
+
+    @Override
+    public IeFileDto downloadFile(Long jobId, Long exp, String sig) {
+        if (jobId == null || !links.verify(jobId, exp, sig)) {
+            throw BusinessException.forbidden(ErrorCode.FILE_LINK_INVALID, "Link tải file không hợp lệ hoặc đã hết hạn");
+        }
+        ImportExportJobEntity j = store.job(jobId);
+        if (j == null || j.getFileUrl() == null || j.getFileUrl().isBlank()) {
+            throw new ResourceNotFoundException("Tác vụ", "Job", jobId);
+        }
+        byte[] content;
+        try {
+            content = files.readCsv(storageKey(j.getFileUrl()));
+        } catch (IOException | IllegalStateException ex) {
+            content = null;
+        }
+        if (content == null) {
+            throw new BusinessException(404, ErrorCode.FILE_NOT_AVAILABLE, "File không còn trên máy chủ, hãy xuất lại");
+        }
+        return new IeFileDto(j.getFileName(), content);
+    }
+
+    /** Job cũ lưu URL công khai ".../storefront/files/ie/..."; job mới lưu thẳng key. */
+    private static String storageKey(String stored) {
+        String marker = "/storefront/files/";
+        int i = stored.indexOf(marker);
+        return i >= 0 ? stored.substring(i + marker.length()) : stored;
     }
 
     @Override

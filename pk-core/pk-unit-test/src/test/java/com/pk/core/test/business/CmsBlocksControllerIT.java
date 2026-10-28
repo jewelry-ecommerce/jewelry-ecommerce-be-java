@@ -54,7 +54,7 @@ class CmsBlocksControllerIT extends IntegrationTestBase {
         // Lỗi block không để lại trang dở dang: tạo lại cùng slug với block hợp lệ phải thành công (không 409).
         mvc.perform(jsonRequest(post(UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlAdminConstant.Cms.PAGES), Map.of("name", "Trang", "slug", slug,
                         "status", "DRAFT", "blocks", List.of(Map.of("type", "IMAGE_GALLERY", "sortOrder", 0,
-                                "config", Map.of("images", List.of(Map.of("url", "/a.jpg")))))))
+                                "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg")))))))
                         .header("Authorization", admin()))
                 .andExpect(status().isCreated());
     }
@@ -68,15 +68,15 @@ class CmsBlocksControllerIT extends IntegrationTestBase {
 
         String blocksPath = UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlAdminConstant.Cms.PAGES + "/" + pageId + "/blocks";
         JsonNode block = body(mvc.perform(jsonRequest(post(blocksPath), Map.of("type", "INFO_CARDS", "sortOrder", 1,
-                        "config", Map.of("cards", List.of(Map.of("title", "A"))), "targetSegment", "VIP"))
+                        "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg", "title", "A", "actionText", "Xem", "actionUrl", "/x"))), "targetSegment", "VIP"))
                         .header("Authorization", admin()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.config.cards[0].title").value("A"))
+                .andExpect(jsonPath("$.data.config.items[0].title").value("A"))
                 .andExpect(jsonPath("$.data.targetSegment").value("VIP")));
         String blockId = block.get("id").asText();
 
         mvc.perform(jsonRequest(put(blocksPath + "/" + blockId), Map.of("type", "IMAGE_GALLERY", "sortOrder", 2,
-                        "config", Map.of("images", List.of())))
+                        "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg")))))
                         .header("Authorization", admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.type").value("IMAGE_GALLERY"))
@@ -234,8 +234,8 @@ class CmsBlocksControllerIT extends IntegrationTestBase {
         String slug = "trang-" + tag();
         JsonNode page = body(mvc.perform(jsonRequest(post(pagesPath()), Map.of("name", "Trang", "slug", slug,
                         "status", "PUBLISHED", "blocks", List.of(
-                                Map.of("type", "INFO_CARDS", "sortOrder", 0, "config", Map.of("cards", List.of()), "isVisible", true),
-                                Map.of("type", "IMAGE_GALLERY", "sortOrder", 1, "config", Map.of("images", List.of()), "isVisible", false))))
+                                Map.of("type", "INFO_CARDS", "sortOrder", 0, "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg", "title", "A", "actionText", "Xem", "actionUrl", "/x"))), "isVisible", true),
+                                Map.of("type", "IMAGE_GALLERY", "sortOrder", 1, "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg"))), "isVisible", false))))
                         .header("Authorization", admin()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.blocks.length()").value(2))
@@ -248,7 +248,7 @@ class CmsBlocksControllerIT extends IntegrationTestBase {
         // Bật lại block ẩn qua PUT block -> storefront trả đủ 2 block.
         String hiddenId = page.get("blocks").get(1).get("id").asText();
         mvc.perform(jsonRequest(put(pagesPath() + "/" + page.get("id").asLong() + "/blocks/" + hiddenId),
-                        Map.of("type", "IMAGE_GALLERY", "sortOrder", 1, "config", Map.of("images", List.of()), "isVisible", true))
+                        Map.of("type", "IMAGE_GALLERY", "sortOrder", 1, "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg"))), "isVisible", true))
                         .header("Authorization", admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.isVisible").value(true));

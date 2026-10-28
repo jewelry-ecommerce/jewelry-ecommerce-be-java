@@ -149,6 +149,7 @@ public class UrlAdminConstant {
         public final String BASE = Common.BASE + "/inventory";
         public final String STOCK_LEVELS = BASE + "/stock-levels";
         public final String ADJUSTMENTS = BASE + "/adjustments";
+        public final String MOVEMENTS = BASE + "/movements";
     }
 
     /** AdminBannerRest (pk-api, gói api.rest.admin - spec FE nhóm Banner). Path variable {id} viết trực tiếp ở Rest.

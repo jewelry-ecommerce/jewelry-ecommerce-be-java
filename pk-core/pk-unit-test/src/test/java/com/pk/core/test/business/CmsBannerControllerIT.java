@@ -42,7 +42,7 @@ class CmsBannerControllerIT extends IntegrationTestBase {
         mvc.perform(jsonRequest(post(UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlAdminConstant.Cms.PAGES), Map.of("slug", slug, "name", "Trang công khai",
                         "status", "PUBLISHED",
                         "blocks", List.of(Map.of("type", "INFO_CARDS", "sortOrder", 0,
-                                "config", Map.of("cards", List.of(Map.of("title", "Hi")))))))
+                                "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg", "title", "A", "actionText", "Xem", "actionUrl", "/x")))))))
                         .header("Authorization", admin))
                 .andExpect(status().is2xxSuccessful());
         mvc.perform(jsonRequest(post(UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlAdminConstant.Cms.PAGES), Map.of("slug", draftSlug, "name", "Bản nháp",
@@ -55,7 +55,7 @@ class CmsBannerControllerIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.data.blocks.length()").value(1))
                 .andExpect(jsonPath("$.data.name").value("Trang công khai"))
                 .andExpect(jsonPath("$.data.blocks[0].type").value("INFO_CARDS"))
-                .andExpect(jsonPath("$.data.blocks[0].config.cards[0].title").value("Hi"));
+                .andExpect(jsonPath("$.data.blocks[0].config.items[0].title").value("A"));
         mvc.perform(get(UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlConstant.Cms.PAGES + "/" + draftSlug)).andExpect(status().isNotFound());
         mvc.perform(get(UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlConstant.Cms.PAGES + "/khong-co-" + tag())).andExpect(status().isNotFound());
     }

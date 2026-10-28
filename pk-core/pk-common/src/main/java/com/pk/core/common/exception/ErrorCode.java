@@ -49,6 +49,9 @@ public final class ErrorCode {
     public static final String PAYMENT_ALREADY_PROCESSED = "PAYMENT_ALREADY_PROCESSED";
     public static final String PAYMENT_AMOUNT_MISMATCH = "PAYMENT_AMOUNT_MISMATCH";
     public static final String PAYMENT_SIGNATURE_INVALID = "PAYMENT_SIGNATURE_INVALID";
+    public static final String CMS_BLOCK_CONFIG_INVALID = "CMS_BLOCK_CONFIG_INVALID";
+    public static final String PAYMENT_METHOD_UNSUPPORTED = "PAYMENT_METHOD_UNSUPPORTED";
+    public static final String PAYMENT_NOT_CONFIGURED = "PAYMENT_NOT_CONFIGURED";
     public static final String PHONE_TAKEN = "PHONE_TAKEN";
     public static final String REFRESH_EXPIRED = "REFRESH_EXPIRED";
     public static final String REFRESH_INVALID = "REFRESH_INVALID";
@@ -57,8 +60,13 @@ public final class ErrorCode {
     public static final String SKU_EXISTS = "SKU_EXISTS";
     public static final String STOCK_ADJUSTMENT_INVALID = "STOCK_ADJUSTMENT_INVALID";
     public static final String STOCK_CONFLICT = "STOCK_CONFLICT";
+    public static final String STOCK_OVERFLOW = "STOCK_OVERFLOW";
+    public static final String STOCK_BELOW_RESERVED = "STOCK_BELOW_RESERVED";
     public static final String IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED";
     public static final String IDEMPOTENCY_KEY_INVALID = "IDEMPOTENCY_KEY_INVALID";
+    public static final String FILE_REJECTED = "FILE_REJECTED";
+    public static final String FILE_LINK_INVALID = "FILE_LINK_INVALID";
+    public static final String FILE_NOT_AVAILABLE = "FILE_NOT_AVAILABLE";
     public static final String UNAUTHORIZED = "UNAUTHORIZED";
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
     public static final String VOUCHER_EXPIRED = "VOUCHER_EXPIRED";

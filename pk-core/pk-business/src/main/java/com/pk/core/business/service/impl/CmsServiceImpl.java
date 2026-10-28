@@ -769,8 +769,11 @@ public class CmsServiceImpl implements CmsService {
             }
         } else if (CmsBlockEntity.PRODUCT_CAROUSEL.equals(type)) {
             validateCarouselConfig(config);
+        } else {
+            // INFO_CARDS, IMAGE_GALLERY, PRODUCT_LIST, PRODUCT_CATEGORY_NAV, PRODUCT_COLLECTION_SHOWCASE,
+            // PRODUCT_EXPANDABLE_DESCRIPTION: kiểm theo schema FE (field lạ được giữ nguyên).
+            CmsBlockConfigValidator.validate(type, config);
         }
-        // INFO_CARDS, IMAGE_GALLERY và các loại còn lại: chỉ cần config là object (cấu trúc do client quy ước).
     }
 
     private static String normalizeStatus(String status) {

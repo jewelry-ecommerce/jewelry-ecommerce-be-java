@@ -36,8 +36,13 @@ app:
     enabled: ${SEED_ENABLED:false}
   upload:
     # Thư mục lưu file upload tạm (mặc định ổ D). public-base-url: tiền tố tuyệt đối trả cho FE, vd http://localhost:8080
+    # Một thư mục gốc cho mọi file, tách folder: images/, videos/ (công khai) và private/import-export/ (CSV, KHÔNG công khai).
+    # Trên cloud nên trỏ UPLOAD_DIR vào ổ bền (persistent disk); ổ tạm thì file mất khi máy dựng lại (ảnh) hoặc phải xuất lại (CSV).
     dir: ${UPLOAD_DIR:D:/pk-uploads}
     public-base-url: ${UPLOAD_PUBLIC_BASE_URL:}
+    # Khoá ký link tải CSV (HMAC). Để trống = khoá ngẫu nhiên mỗi lần khởi động (link cũ hết hiệu lực khi restart). Không đặt giá trị thật vào git.
+    signing-secret: ${UPLOAD_SIGNING_SECRET:}
+    link-ttl-seconds: ${UPLOAD_LINK_TTL_SECONDS:600}
 
 management:
   endpoints:

@@ -27,7 +27,7 @@ import java.util.HexFormat;
  * XỬ LÝ CALLBACK THANH TOÁN - GIỚI HẠN QUAN TRỌNG (đọc trước khi dùng thật): dự án chưa tích hợp
  * VNPay/MoMo thật (không có tài liệu API + secret key thật của cổng nào), nên {@link #verifySignature}
  * ở đây chỉ là HMAC-SHA256 TỰ QUY ƯỚC (canonical string tự đặt, secret đọc từ
- * `app.payment.webhook-secret`, mặc định giá trị dev KHÔNG AN TOÀN) - hoàn toàn KHÔNG PHẢI thuật
+ * `app.payment.webhook-secret`, KHÔNG có giá trị mặc định: để trống thì callback bị từ chối 503) - hoàn toàn KHÔNG PHẢI thuật
  * toán ký thật của VNPay (HMAC theo vnp_SecureHash) hay MoMo. Trước khi dùng ngoài môi trường đồ án,
  * PHẢI thay verifySignature() bằng đúng thuật toán + secret thật của cổng thanh toán được chọn.
  */
@@ -39,12 +39,17 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepo orders;
     private final OrderTimelineRepo orderTimelines;
 
-    @Value("${app.payment.webhook-secret:dev-only-insecure-secret}")
+    /** Rỗng = chưa cấu hình cổng thanh toán -> callback bị từ chối (fail-closed), không có secret mặc định. */
+    @Value("${app.payment.webhook-secret:}")
     private String webhookSecret;
 
     @Transactional
     @Override
     public void handleCallback(Long paymentId, PaymentCallbackRequestDto req) {
+        if (webhookSecret == null || webhookSecret.isBlank()) {
+            throw new BusinessException(503, ErrorCode.PAYMENT_NOT_CONFIGURED,
+                    "Cổng thanh toán online chưa được cấu hình");
+        }
         PaymentEntity payment = payments.findOne(paymentId);
         if (payment == null) {
             throw new ResourceNotFoundException("Giao dịch thanh toán", "Payment", paymentId);

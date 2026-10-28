@@ -34,6 +34,8 @@ public class UrlConstant {
         public final String BASE = Common.BASE + "/storefront";
         /** GET công khai - phục vụ file đã upload (ảnh/video). */
         public final String FILES = BASE + "/files";
+        /** GET công khai nhưng cần link ký có hạn (exp+sig) - file riêng tư như CSV import/export. */
+        public final String PRIVATE_FILES = BASE + "/private-files";
     }
 
     /** ProductRest (pk-api) - danh sách/chi tiết sản phẩm, danh mục, bộ sưu tập cho storefront. */
@@ -44,6 +46,8 @@ public class UrlConstant {
         public final String COLLECTIONS = BASE + "/collections";
         /** Sản phẩm ghim ở ô tìm kiếm (landing) đang hiệu lực, công khai. */
         public final String SEARCH_PINNED = BASE + "/search-pinned";
+        /** Tìm kiếm: GET /search/trending, GET /search/suggestions?q, và lịch sử (cần đăng nhập) /search/history. */
+        public final String SEARCH = BASE + "/search";
         /** Chi tiết theo slug: BASE + "/{slug}" - ghép ở Rest bằng @GetMapping(BASE + "/{slug}"). */
     }
 

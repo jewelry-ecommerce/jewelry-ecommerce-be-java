@@ -43,3 +43,6 @@ Profile `dev` tắt Flyway (`application-dev.yml`) nên DB dev phải dựng b�
 -Kết nối cổng localhost:8082
 - Swagger UI: http://localhost:8082/swagger-ui.html
 
+## 4. Deploy lên server
+
+Docker Compose (app + PostgreSQL + HTTPS) nằm ở thư mục `deploy/` ở gốc repo. Hướng dẫn từng bước cho Oracle Cloud Always Free: `deploy/DEPLOY-ORACLE.md`.
