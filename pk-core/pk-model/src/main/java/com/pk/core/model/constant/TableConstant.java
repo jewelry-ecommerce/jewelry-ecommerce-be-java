@@ -96,6 +96,13 @@ public static final String ORDER_NOTES = "order_notes";
     // Cấu hình đặt trước (V8__pre_order_configs.sql, 2026-10-06)
     public static final String PRE_ORDER_CONFIGS = "pre_order_configs";
 
+    // Sổ kho - điều chỉnh tồn thủ công (V37__inventory_movements.sql, 2026-10-28)
+    public static final String INVENTORY_MOVEMENTS = "inventory_movements";
+
+    // Tìm kiếm storefront: từ khoá phổ biến + lịch sử theo tài khoản (V38__search_keywords.sql, 2026-10-28)
+    public static final String SEARCH_KEYWORDS = "search_keywords";
+    public static final String SEARCH_HISTORY = "search_history";
+
     private TableConstant() {
     }
 }

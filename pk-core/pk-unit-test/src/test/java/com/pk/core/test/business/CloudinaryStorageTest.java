@@ -113,6 +113,24 @@ class CloudinaryStorageTest {
         assertThrows(BusinessException.class, () -> validator.validate(image()));
     }
 
+    @Test
+    void svgUsesImageEndpointAndPreservesSvgContract() {
+        String svg = "<svg xmlns='http://www.w3.org/2000/svg'><path d='M0 0 L10 10'/></svg>";
+        server.expect(requestTo(ENDPOINT)).andExpect(request -> {
+            String body = ((MockClientHttpRequest) request).getBodyAsString();
+            assertTrue(body.contains("image/svg+xml"));
+            assertTrue(body.contains("<svg"));
+        }).andRespond(withSuccess(
+                "{\"secure_url\":\"https://res.cloudinary.com/test-cloud/image/upload/logo.svg\"}",
+                MediaType.APPLICATION_JSON));
+        var response = storage.store(new MockMultipartFile("file", "header-logo.svg",
+                "image/svg+xml", svg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertEquals("image/svg+xml", response.getContentType());
+        assertEquals("IMAGE", response.getType());
+        assertTrue(response.getFileName().endsWith(".svg"));
+        server.verify();
+    }
+
     private MockMultipartFile image() {
         return new MockMultipartFile("file", "image.png", "image/png", PNG);
     }

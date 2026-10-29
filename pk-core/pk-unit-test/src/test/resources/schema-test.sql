@@ -28,6 +28,9 @@ CREATE SEQUENCE product_approval_requests_id_seq START WITH 1;
 CREATE SEQUENCE import_export_jobs_id_seq START WITH 1;
 CREATE SEQUENCE import_job_rows_id_seq START WITH 1;
 CREATE SEQUENCE order_idempotency_keys_id_seq START WITH 1;
+CREATE SEQUENCE inventory_movements_id_seq START WITH 1;
+CREATE SEQUENCE search_keywords_id_seq START WITH 1;
+CREATE SEQUENCE search_history_id_seq START WITH 1;
 CREATE SEQUENCE site_headers_id_seq START WITH 1;
 CREATE SEQUENCE site_footer_id_seq START WITH 1;
 CREATE SEQUENCE site_logos_id_seq START WITH 1;
@@ -838,6 +841,44 @@ CREATE TABLE order_idempotency_keys (
     created_id   BIGINT,
     created_date TIMESTAMP    NOT NULL,
     CONSTRAINT uq_order_idem UNIQUE (owner, idem_key)
+);
+
+CREATE TABLE inventory_movements (
+    id             BIGINT PRIMARY KEY,
+    sku_id         BIGINT       NOT NULL,
+    warehouse_id   VARCHAR(30)  NOT NULL DEFAULT 'MAIN',
+    reason         VARCHAR(20)  NOT NULL,
+    quantity_delta INTEGER      NOT NULL,
+    on_hand_before INTEGER      NOT NULL,
+    on_hand_after  INTEGER      NOT NULL,
+    reserved_after INTEGER      NOT NULL,
+    reference      VARCHAR(100),
+    note           VARCHAR(500),
+    idem_key       VARCHAR(100),
+    request_hash   VARCHAR(64),
+    created_id     BIGINT,
+    created_date   TIMESTAMP    NOT NULL,
+    CONSTRAINT ck_inventory_movements_reason CHECK (reason IN ('RECEIPT', 'DAMAGE', 'CORRECTION')),
+    CONSTRAINT ck_inventory_movements_delta CHECK (quantity_delta <> 0),
+    CONSTRAINT uq_inventory_movements_idem UNIQUE (created_id, idem_key)
+);
+
+CREATE TABLE search_keywords (
+    id                 BIGINT PRIMARY KEY,
+    keyword            VARCHAR(100) NOT NULL,
+    keyword_key        VARCHAR(100) NOT NULL,
+    hit_count          BIGINT       NOT NULL DEFAULT 1,
+    last_searched_date TIMESTAMP    NOT NULL,
+    CONSTRAINT uq_search_keywords_key UNIQUE (keyword_key)
+);
+
+CREATE TABLE search_history (
+    id            BIGINT PRIMARY KEY,
+    user_id       BIGINT       NOT NULL,
+    keyword       VARCHAR(100) NOT NULL,
+    keyword_key   VARCHAR(100) NOT NULL,
+    searched_date TIMESTAMP    NOT NULL,
+    CONSTRAINT uq_search_history_user_key UNIQUE (user_id, keyword_key)
 );
 
 CREATE TABLE site_headers (

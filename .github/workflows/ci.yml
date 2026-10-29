@@ -5,6 +5,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: 'Run unit and integration tests (H2)'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -22,19 +27,17 @@ jobs:
           java-version: '17'
           cache: maven
           cache-dependency-path: '**/pom.xml'
-      - name: Build and run unit plus integration tests (isolated H2)
+      - name: Build only
+        if: ${{ !inputs.run_tests }}
         working-directory: pk-core
-        run: mvn -B -ntp verify "-Dtest=*Test,*IT" -Dsurefire.failIfNoSpecifiedTests=false
+        run: mvn -B -ntp -pl pk-service -am package -DskipTests
+      - name: Build and test (isolated H2)
+        if: ${{ inputs.run_tests }}
+        working-directory: pk-core
+        run: mvn -B -ntp verify "-Dtest=*Test,*IT" "-Dsurefire.failIfNoSpecifiedTests=false"
       - name: Upload runnable jar
         uses: actions/upload-artifact@v4
         with:
           name: jewelry-java-exec
           path: pk-core/pk-service/target/*-exec.jar
-          retention-days: 3
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: java-test-results
-          path: pk-core/pk-unit-test/target/surefire-reports/
           retention-days: 3

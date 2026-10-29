@@ -55,11 +55,11 @@ class CmsPublishV5IT extends IntegrationTestBase {
     }
 
     private static Map<String, Object> cards(int sortOrder) {
-        return Map.of("type", "INFO_CARDS", "sortOrder", sortOrder, "config", Map.of("cards", List.of()));
+        return Map.of("type", "INFO_CARDS", "sortOrder", sortOrder, "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg", "title", "A", "actionText", "Xem", "actionUrl", "/x"))));
     }
 
     private static Map<String, Object> gallery(int sortOrder) {
-        return Map.of("type", "IMAGE_GALLERY", "sortOrder", sortOrder, "config", Map.of("images", List.of()));
+        return Map.of("type", "IMAGE_GALLERY", "sortOrder", sortOrder, "config", Map.of("header", Map.of("title", "T"), "items", List.of(Map.of("imageUrl", "/a.jpg"))));
     }
 
     /** Tạo trang + xuất bản ngay (status PUBLISHED), trả JSON admin. */

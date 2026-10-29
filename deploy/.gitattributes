@@ -1,0 +1,2 @@
+# Docker/shell chạy trên Linux nên luôn dùng LF (tránh lỗi khi clone trên Windows)
+* text eol=lf

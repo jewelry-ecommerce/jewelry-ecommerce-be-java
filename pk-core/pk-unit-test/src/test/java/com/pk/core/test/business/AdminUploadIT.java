@@ -47,6 +47,51 @@ class AdminUploadIT extends IntegrationTestBase {
     }
 
     @Test
+    void imagesAndVideosGoToSeparateFolders() throws Exception {
+        String admin = bearer(adminAccessToken());
+        String image = body(mvc.perform(multipart(UPLOAD).file(new MockMultipartFile("file", "a.png", "image/png", PNG))
+                .header("Authorization", admin)).andExpect(status().isCreated())).get("url").asText();
+        byte[] mp4 = {0, 0, 0, 0x18, 'f', 't', 'y', 'p', 'm', 'p', '4', '2', 0, 0, 0, 0};
+        JsonNode video = body(mvc.perform(multipart(UPLOAD).file(new MockMultipartFile("file", "v.mp4", "video/mp4", mp4))
+                .header("Authorization", admin)).andExpect(status().isCreated()));
+        org.junit.jupiter.api.Assertions.assertTrue(image.contains("/storefront/files/images/"), image);
+        org.junit.jupiter.api.Assertions.assertTrue(video.get("url").asText().contains("/storefront/files/videos/"));
+        org.junit.jupiter.api.Assertions.assertEquals("VIDEO", video.get("type").asText());
+        mvc.perform(get(video.get("url").asText())).andExpect(status().isOk());
+    }
+
+    @Test
+    void staticSvgIsAcceptedAndServedWithLockdownHeaders() throws Exception {
+        String svg = "<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><path d=\"M0 0L10 10\" fill=\"#c00\"/></svg>";
+        JsonNode res = body(mvc.perform(multipart(UPLOAD).file(new MockMultipartFile("file", "logo.svg", "image/svg+xml",
+                        svg.getBytes(StandardCharsets.UTF_8))).header("Authorization", bearer(adminAccessToken())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.contentType").value("image/svg+xml"))
+                .andExpect(jsonPath("$.data.type").value("IMAGE")));
+        String url = res.get("url").asText();
+        org.junit.jupiter.api.Assertions.assertTrue(url.contains("/storefront/files/images/") && url.endsWith(".svg"), url);
+        mvc.perform(get(url)).andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Security-Policy",
+                        org.hamcrest.Matchers.containsString("default-src 'none'")));
+    }
+
+    @Test
+    void unsafeSvgIsRejectedWithStableCode() throws Exception {
+        String admin = bearer(adminAccessToken());
+        for (String bad : new String[] {
+                "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>",
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"/>",
+                "<svg xmlns=\"http://www.w3.org/2000/svg\"><image href=\"http://evil/x.png\"/></svg>",
+                "<!DOCTYPE svg [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><svg xmlns=\"http://www.w3.org/2000/svg\">&x;</svg>"}) {
+            mvc.perform(multipart(UPLOAD).file(new MockMultipartFile("file", "x.svg", "image/svg+xml",
+                            bad.getBytes(StandardCharsets.UTF_8))).header("Authorization", admin))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors[0].code").value("FILE_REJECTED"));
+        }
+    }
+
+    @Test
     void uploadRequiresAdminToken() throws Exception {
         mvc.perform(multipart(UPLOAD).file(new MockMultipartFile("file", "a.png", "image/png", PNG)))
                 .andExpect(status().isUnauthorized());

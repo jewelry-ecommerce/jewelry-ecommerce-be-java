@@ -33,6 +33,7 @@ import java.util.Date;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -167,7 +168,11 @@ class CustomerRequestServiceTest {
         when(requests.findOpen(CustomerRequestEntity.NEWSLETTER, "a@b.com", 0L, ""))
                 .thenReturn(request(1L, CustomerRequestEntity.NEWSLETTER, "a@b.com", "NEW", new Date()));
 
-        assertTrue(service.subscribeNewsletter(new NewsletterRequestDto("a@b.com")).isSuccess());
+        MessageResponseDto ack = service.subscribeNewsletter(new NewsletterRequestDto("a@b.com"));
+        assertTrue(ack.isSuccess());
+        // Chỉ lưu yêu cầu, chưa có bộ gửi thật: không được báo là đã gửi thông báo.
+        assertTrue(((com.pk.core.model.dto.response.CustomerRequestAckResponseDto) ack).isRecorded());
+        assertFalse(((com.pk.core.model.dto.response.CustomerRequestAckResponseDto) ack).isNotificationSent());
         verify(requests, never()).create(any(CustomerRequestEntity.class));
     }
 

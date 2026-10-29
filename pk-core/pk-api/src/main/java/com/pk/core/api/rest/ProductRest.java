@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.pk.core.identity.security.model.SecurityUser;
+import com.pk.core.common.web.PageResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +41,7 @@ public class ProductRest extends AbstractRest {
     private final CategoryService categoryService;
     private final CollectionService collectionService;
     private final com.pk.core.business.service.SearchPinnedService searchPinnedService;
+    private final com.pk.core.business.service.SearchKeywordService searchKeywordService;
 
     /** Sản phẩm đang được ghim ở ô tìm kiếm (landing), theo thứ tự ô. */
     @GetMapping(UrlConstant.Product.SEARCH_PINNED)
@@ -61,13 +66,31 @@ public class ProductRest extends AbstractRest {
                            @RequestParam(required = false, defaultValue = "NEWEST") String sort,
                            @RequestParam(required = false, defaultValue = "1") int page,
                            @RequestParam(required = false, defaultValue = "20") int take,
+                           @AuthenticationPrincipal SecurityUser principal,
                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(productService.search(new ProductSearchQuery(category,
+            PageResponse<?> result = productService.search(new ProductSearchQuery(category,
                     splitStrings(categorySlugs), collection, search, material, minPrice, maxPrice,
-                    splitIds(attributes), inStock, sort, page, take)));
+                    splitIds(attributes), inStock, sort, page, take));
+            recordSearch(principal, search, page, result);
+            return restSuccessHandle.handleSuccess(result);
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    /**
+     * Ghi từ khoá vào trending + lịch sử (nếu đã đăng nhập) khi trang ĐẦU của một lượt tìm có kết quả. Lỗi ghi nhận không bao giờ
+     * làm hỏng kết quả tìm kiếm.
+     */
+    private void recordSearch(SecurityUser principal, String search, int page, PageResponse<?> result) {
+        if (search == null || search.isBlank() || page > 1 || result.totalElements() == 0) {
+            return;
+        }
+        try {
+            searchKeywordService.record(principal == null ? null : principal.getId(), search);
+        } catch (Exception ex) {
+            org.slf4j.LoggerFactory.getLogger(ProductRest.class).debug("Không ghi nhận được từ khoá tìm kiếm", ex);
         }
     }
 

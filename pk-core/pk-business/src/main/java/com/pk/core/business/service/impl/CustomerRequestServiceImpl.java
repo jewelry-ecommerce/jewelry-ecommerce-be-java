@@ -16,6 +16,7 @@ import com.pk.core.model.dto.request.BackInStockRequestDto;
 import com.pk.core.model.dto.request.CustomerRequestBulkStatusRequestDto;
 import com.pk.core.model.dto.request.NewsletterRequestDto;
 import com.pk.core.model.dto.request.OrderSupportRequestDto;
+import com.pk.core.model.dto.response.CustomerRequestAckResponseDto;
 import com.pk.core.model.dto.response.CustomerRequestPageResponseDto;
 import com.pk.core.model.dto.response.CustomerRequestResponseDto;
 import com.pk.core.model.dto.response.MessageResponseDto;
@@ -73,7 +74,7 @@ public class CustomerRequestServiceImpl implements CustomerRequestService {
             r.setVariantTextSnapshot(variantText(sku));
             requests.create(r);
         }
-        return MessageResponseDto.ok("Đã ghi nhận, chúng tôi sẽ liên hệ khi sản phẩm có hàng trở lại");
+        return new CustomerRequestAckResponseDto("Đã ghi nhận yêu cầu. Cửa hàng sẽ liên hệ với bạn khi sản phẩm có hàng trở lại");
     }
 
     @Transactional
@@ -90,7 +91,7 @@ public class CustomerRequestServiceImpl implements CustomerRequestService {
             r.setOrderType(CustomerRequestEntity.ORDER);
             requests.create(r);
         }
-        return MessageResponseDto.ok("Đã ghi nhận yêu cầu hỗ trợ, chúng tôi sẽ liên hệ với bạn sớm");
+        return new CustomerRequestAckResponseDto("Đã ghi nhận yêu cầu hỗ trợ. Cửa hàng sẽ liên hệ với bạn sớm");
     }
 
     @Transactional
@@ -101,7 +102,7 @@ public class CustomerRequestServiceImpl implements CustomerRequestService {
             requests.create(new CustomerRequestEntity(CustomerRequestEntity.NEWSLETTER,
                     CustomerRequestEntity.EMAIL, email));
         }
-        return MessageResponseDto.ok("Đăng ký nhận tin thành công");
+        return new CustomerRequestAckResponseDto("Đã lưu email đăng ký nhận tin của bạn");
     }
 
     @Transactional(readOnly = true)

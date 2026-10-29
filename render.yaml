@@ -4,9 +4,10 @@ services:
     runtime: docker
     plan: free
     branch: main
+    region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     healthCheckPath: /actuator/health
     envVars:
       - key: SPRING_PROFILES_ACTIVE

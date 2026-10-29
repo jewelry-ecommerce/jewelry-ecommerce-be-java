@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 64" fill="none">
+  <!-- Marquise cut gem icon, 32×46px, vertically centered in 64px canvas -->
+  <g transform="translate(0,9)" stroke="#1B1F22" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Outer marquise boundary -->
+    <path d="M16,0 Q32,23 16,46 Q0,23 16,0Z"/>
+    <!-- Inner table (octagon) -->
+    <path d="M16,8 L22,15 L26,23 L22,31 L16,38 L10,31 L6,23 L10,15Z"/>
+    <!-- Kite facets from top tip -->
+    <line x1="16" y1="0" x2="10" y2="15"/>
+    <line x1="16" y1="0" x2="22" y2="15"/>
+    <!-- Kite facets from bottom tip -->
+    <line x1="16" y1="46" x2="10" y2="31"/>
+    <line x1="16" y1="46" x2="22" y2="31"/>
+    <!-- Kite facets from left tip -->
+    <line x1="0" y1="23" x2="10" y2="15"/>
+    <line x1="0" y1="23" x2="10" y2="31"/>
+    <!-- Kite facets from right tip -->
+    <line x1="32" y1="23" x2="22" y2="15"/>
+    <line x1="32" y1="23" x2="22" y2="31"/>
+  </g>
+  <!-- Wordmark: two-line stacked -->
+  <text
+    x="46" y="26"
+    font-family="'Hanken Grotesk','Inter','Helvetica Neue',Helvetica,Arial,sans-serif"
+    font-size="18" font-weight="500" letter-spacing="3.5"
+    fill="#1B1F22">JEWELRY</text>
+  <text
+    x="46" y="50"
+    font-family="'Hanken Grotesk','Inter','Helvetica Neue',Helvetica,Arial,sans-serif"
+    font-size="18" font-weight="500" letter-spacing="3.5"
+    fill="#1B1F22">ECOMMERCE</text>
+</svg>

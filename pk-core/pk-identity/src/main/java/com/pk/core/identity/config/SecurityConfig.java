@@ -48,6 +48,8 @@ public class SecurityConfig {
                         // Yêu thích (/storefront/product/customer/wishlist): bắt buộc đăng nhập. PHẢI đứng TRƯỚC rule GET
                         // công khai của Product.BASE bên dưới (Spring Security khớp rule đầu tiên trùng).
                         .requestMatchers(v1(UrlConstant.Wishlist.BASE + "/**")).authenticated()
+                        // Lịch sử tìm kiếm của tài khoản: bắt buộc đăng nhập, cũng PHẢI đứng trước rule GET công khai của Product.BASE.
+                        .requestMatchers(v1(UrlConstant.Product.SEARCH + "/history"), v1(UrlConstant.Product.SEARCH + "/history/**")).authenticated()
                         // Giỏ hàng: công khai cho khách vãng lai (header X-Guest-Cart-Id); gộp giỏ vào tài khoản thì bắt buộc
                         // đăng nhập - rule merge cụ thể đặt TRƯỚC rule chung.
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Cart.BASE + "/merge")).authenticated()
@@ -71,6 +73,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Order.GUEST + "/*")).permitAll()
                         // File ảnh/video đã upload: công khai, chỉ GET.
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Storefront.FILES + "/**")).permitAll()
+                        // File riêng tư (CSV import/export): chỉ GET, tự xác thực bằng chữ ký + hạn trong query (exp, sig).
+                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Storefront.PRIVATE_FILES + "/**")).permitAll()
                         // Webhook cổng thanh toán: không có Bearer token, tự xác thực bằng chữ ký (mục F)
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/**")).permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()

@@ -1,0 +1,33 @@
+# Profile production (SPRING_PROFILES_ACTIVE=prod). Chồng lên application.yml: DB, khoá JWT, CORS... lấy từ biến môi trường.
+spring:
+  flyway:
+    enabled: true             # schema do Flyway quản lý (V1..V36), tự chạy khi app khởi động trên DB trống
+  sql:
+    init:
+      mode: never
+
+server:
+  forward-headers-strategy: framework   # tin X-Forwarded-* từ reverse proxy (Caddy) để biết đúng https/host
+  tomcat:
+    max-swallow-size: 12MB
+
+app:
+  seed:
+    enabled: false            # không tạo tài khoản mặc định trên server công khai
+  otp:
+    fixed-code: ""            # OTP cố định chỉ dành cho dev
+
+springdoc:
+  api-docs:
+    enabled: false            # ẩn tài liệu API/Swagger trên server công khai
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
