@@ -16,6 +16,7 @@ final class SvgUploadValidator {
     private SvgUploadValidator() {}
 
     static void validate(MultipartFile file) {
+        if (file.getSize() > SvgUploadPolicy.MAX_BYTES) throw invalid();
         try (InputStream input = file.getInputStream()) {
             XMLStreamReader reader = readerFactory().createXMLStreamReader(input);
             try {
@@ -89,7 +90,7 @@ final class SvgUploadValidator {
     }
 
     private static BusinessException invalid() {
-        return BusinessException.badRequest(ErrorCode.VALIDATION_FAILED,
+        return BusinessException.badRequest(ErrorCode.FILE_REJECTED,
                 "SVG không hợp lệ hoặc chứa script, nội dung nhúng hay liên kết ngoài. Dùng SVG tĩnh hoặc PNG.");
     }
 }

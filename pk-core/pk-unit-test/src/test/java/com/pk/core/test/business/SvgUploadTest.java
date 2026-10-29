@@ -3,6 +3,7 @@ package com.pk.core.test.business;
 import com.pk.core.business.storage.UploadMediaKind;
 import com.pk.core.business.storage.UploadMediaValidator;
 import com.pk.core.business.service.impl.LocalFileStorageService;
+import com.pk.core.business.service.impl.UploadStorage;
 import com.pk.core.common.exception.BusinessException;
 import com.pk.core.common.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,8 @@ class SvgUploadTest {
     @Test
     void localStoragePreservesSvgBytesAndMime() throws Exception {
         String contents = OPEN + "<path d='M0 0 L10 10' fill='#333'/>" + CLOSE;
-        var storage = new LocalFileStorageService(validator, temporaryDirectory.toString(), "https://example.test");
+        var storage = new LocalFileStorageService(validator,
+                new UploadStorage(temporaryDirectory.toString(), "https://example.test"));
         var response = storage.store(svg(contents));
         assertEquals("image/svg+xml", response.getContentType());
         assertEquals("IMAGE", response.getType());
@@ -75,7 +77,7 @@ class SvgUploadTest {
     void rejectsActiveContentAndExternalResources(String content) {
         BusinessException error = assertThrows(BusinessException.class, () -> validator.validate(svg(OPEN + content + CLOSE)));
         assertEquals(400, error.getStatus());
-        assertEquals(ErrorCode.VALIDATION_FAILED, error.getCode());
+        assertEquals(ErrorCode.FILE_REJECTED, error.getCode());
     }
 
     @ParameterizedTest
@@ -97,6 +99,9 @@ class SvgUploadTest {
     void rejectsExcessiveNestingAndOversizeSvg() {
         String nested = OPEN + "<g>".repeat(129) + "</g>".repeat(129) + CLOSE;
         assertThrows(BusinessException.class, () -> validator.validate(svg(nested)));
+        String oversized = OPEN + " ".repeat(512 * 1024) + CLOSE;
+        assertEquals(ErrorCode.FILE_REJECTED,
+                assertThrows(BusinessException.class, () -> validator.validate(svg(oversized))).getCode());
         assertThrows(BusinessException.class, () -> new UploadMediaValidator(4).validate(svg(OPEN + CLOSE)));
     }
 

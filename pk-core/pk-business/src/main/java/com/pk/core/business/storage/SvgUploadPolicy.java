@@ -8,6 +8,7 @@ final class SvgUploadPolicy {
     static final String NAMESPACE = "http://www.w3.org/2000/svg";
     static final String XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
     static final int MAX_DEPTH = 128;
+    static final int MAX_BYTES = 512 * 1024;
     static final int MAX_ELEMENTS = 100000;
     static final Set<String> ELEMENTS = Set.of("svg", "g", "defs", "path", "rect", "circle",
             "ellipse", "line", "polyline", "polygon", "text", "tspan", "title", "desc",

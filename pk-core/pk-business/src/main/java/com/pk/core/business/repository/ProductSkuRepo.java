@@ -41,6 +41,14 @@ public interface ProductSkuRepo extends PkRepo<ProductSkuEntity, Long> {
     @Modifying
     int adjustOnHand(@Param("skuId") Long skuId, @Param("delta") int delta);
 
+    /** Điều chỉnh tồn kho từ form admin (RECEIPT/DAMAGE/CORRECTION), chặt hơn {@link #adjustOnHand}: on_hand sau
+     * điều chỉnh không âm, không vượt INT (so sánh bằng BIGINT nên không tràn), và khi GIẢM thì không được xuống dưới
+     * phần đang giữ chỗ (LEAST(reserved, on_hand)) - hàng thường không bị biến thành backorder vì điều chỉnh giảm;
+     * SKU đang nợ (reserved > on_hand) không được giảm thêm. Tăng luôn được (nhập bù). Không đụng reserved.
+     * Trả 0 nếu vi phạm điều kiện (InventoryServiceImpl đọc lại để báo đúng lý do). */
+    @Modifying
+    int adjustOnHandChecked(@Param("skuId") Long skuId, @Param("delta") int delta);
+
     /** Chốt xuất tồn khi giao: on_hand -= qty và reserved -= qty (đều không âm; đơn đặt trước có thể on_hand < qty). */
     @Modifying
     int fulfillStock(@Param("skuId") Long skuId, @Param("qty") int qty);

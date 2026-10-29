@@ -1,6 +1,8 @@
 package com.pk.core.business.service;
 
+import com.pk.core.common.web.PageResponse;
 import com.pk.core.model.dto.request.AdminStockAdjustmentRequestDto;
+import com.pk.core.model.dto.response.InventoryMovementResponseDto;
 import com.pk.core.model.dto.response.StockLevelResponseDto;
 
 import java.util.List;
@@ -19,6 +21,20 @@ public interface InventoryService {
      * bỏ qua giá trị, không truyền xuống tầng service. */
     List<StockLevelResponseDto> stockLevels(String keyword);
 
-    /** POST /admin/inventory/adjustments - 422 NEGATIVE_STOCK nếu on_hand sau điều chỉnh sẽ âm. */
-    StockLevelResponseDto adjust(AdminStockAdjustmentRequestDto req);
+    /**
+     * POST /admin/inventory/adjustments - 400 STOCK_ADJUSTMENT_INVALID (delta 0 / sai dấu theo reason), 422 NEGATIVE_STOCK |
+     * STOCK_OVERFLOW | STOCK_BELOW_RESERVED, 409 STOCK_CONFLICT khi thua race. Mỗi lần thành công ghi 1 dòng sổ kho cùng
+     * transaction. idempotencyKey (tuỳ chọn, 8-100 ký tự): cùng người làm + cùng khoá + cùng nội dung thì KHÔNG cộng lần nữa
+     * (trả tồn hiện tại của SKU); cùng khoá khác nội dung -> 409 IDEMPOTENCY_KEY_REUSED.
+     */
+    StockLevelResponseDto adjust(AdminStockAdjustmentRequestDto req, Long actorId, String idempotencyKey);
+
+    /**
+     * GET /admin/inventory/movements - sổ kho, mới nhất trước. Lọc tuỳ chọn theo skuId, reason, khoảng thời gian
+     * [from, to) (ISO-8601: ngày `2026-10-28`, hoặc ngày giờ có/không offset; `to` dạng ngày là ngày đó trọn ngày). page 1-based.
+     */
+    PageResponse<InventoryMovementResponseDto> movements(Long skuId, String reason, String from, String to, int page, int take);
+
+    /** GET /admin/inventory/movements/{id} - 404 nếu không có. */
+    InventoryMovementResponseDto movement(Long id);
 }

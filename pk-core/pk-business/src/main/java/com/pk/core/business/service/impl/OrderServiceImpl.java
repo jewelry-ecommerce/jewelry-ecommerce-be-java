@@ -96,6 +96,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createNew(Long userId, CreateOrderRequestDto req) {
+        requireCod(req.getPaymentMethod());
         CustomerAddressEntity address = addresses.findByIdAndUserId(req.getAddressId(), userId);
         if (address == null) {
             throw new ResourceNotFoundException("Địa chỉ giao hàng", "Address", req.getAddressId());
@@ -136,7 +137,7 @@ public class OrderServiceImpl implements OrderService {
             if (!expired) {
                 if (!existing.getRequestHash().equals(hash)) {
                     throw BusinessException.conflict(ErrorCode.IDEMPOTENCY_KEY_REUSED,
-                            "Idempotency-Key này đã được dùng cho một đơn hàng với nội dung khác");
+                            "Idempotency-Key này đã được dùng cho một yêu cầu khác với nội dung khác");
                 }
                 OrderEntity previous = orders.findByCode(existing.getOrderCode());
                 if (previous != null) {
@@ -166,6 +167,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createGuestNew(GuestOrderRequestDto req, String guestCartId) {
+        requireCod(req.getPaymentMethod());
         CustomerAddressEntity shipTo = new CustomerAddressEntity();
         shipTo.setRecipientName(req.getRecipientName().trim());
         shipTo.setPhone(req.getPhone().trim());
@@ -800,9 +802,10 @@ public class OrderServiceImpl implements OrderService {
         return null;
     }
 
+    /** Phạm vi đồ án chỉ COD: storefront lẫn admin đều từ chối phương thức khác (400, mã ổn định cho FE). */
     private static void requireCod(String paymentMethod) {
         if (paymentMethod != null && !paymentMethod.isBlank() && !"COD".equalsIgnoreCase(paymentMethod.trim())) {
-            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "Hiện chỉ hỗ trợ thanh toán COD");
+            throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED, "Hiện chỉ hỗ trợ thanh toán COD");
         }
     }
 
