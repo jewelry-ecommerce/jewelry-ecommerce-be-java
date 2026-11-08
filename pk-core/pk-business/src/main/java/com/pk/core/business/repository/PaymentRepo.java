@@ -8,4 +8,5 @@ public interface PaymentRepo extends PkRepo<PaymentEntity, Long> {
     /** Trả null nếu chưa có giao dịch nào cho đơn này (VD đơn thanh toán COD). Model đơn giản: mỗi
      * đơn tối đa 1 giao dịch thanh toán (chưa hỗ trợ thử lại nhiều lần/nhiều provider). */
     PaymentEntity findByOrderId(@Param("orderId") Long orderId);
+    PaymentEntity findByGatewayOrderId(@Param("gatewayOrderId") String gatewayOrderId);
 }

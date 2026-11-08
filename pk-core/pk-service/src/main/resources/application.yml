@@ -21,6 +21,15 @@ server:
   shutdown: graceful
 
 app:
+  payment:
+    momo:
+      enabled: ${MOMO_ENABLED:false}
+      partner-code: ${MOMO_PARTNER_CODE:}
+      access-key: ${MOMO_ACCESS_KEY:}
+      secret-key: ${MOMO_SECRET_KEY:}
+      redirect-url: ${MOMO_REDIRECT_URL:}
+      ipn-url: ${MOMO_IPN_URL:}
+      timeout: ${MOMO_TIMEOUT:30s}
   mirage:
     dialect: ${MIRAGE_DIALECT:postgresql}   # postgresql | h2 (test)
   jwt:

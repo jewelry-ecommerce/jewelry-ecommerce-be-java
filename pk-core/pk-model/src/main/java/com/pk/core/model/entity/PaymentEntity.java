@@ -48,9 +48,16 @@ public class PaymentEntity extends UpdateEntity {
     @Column(name = "signature")
     private String signature;
 
+    @Column(name = "gateway_order_id")
+    private String gatewayOrderId;
+
+    @Column(name = "checkout_url")
+    private String checkoutUrl;
+
     public PaymentEntity(Long orderId, String provider, BigDecimal amount) {
         this.orderId = orderId;
         this.provider = provider;
         this.amount = amount;
+        if ("MOMO".equals(provider)) this.gatewayOrderId = java.util.UUID.randomUUID().toString();
     }
 }
