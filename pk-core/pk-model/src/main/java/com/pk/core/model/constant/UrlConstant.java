@@ -86,13 +86,15 @@ public class UrlConstant {
         /** Callback: BASE + "/{paymentId}/callback". */
     }
 
-    /** AiRest (pk-api) - gợi ý sản phẩm/set trang sức (heuristic, xem AiStylistService javadoc),
-     * không cần đăng nhập. */
+    /** AiRest (pk-api) - AI Stylist / Smart Set Builder. Recommend/set-builder công khai;
+     * feedback/history yêu cầu đăng nhập (SecurityConfig). */
     @UtilityClass
     public static class Ai {
         public final String BASE = Storefront.BASE + "/ai";
         public final String STYLIST_RECOMMENDATIONS = BASE + "/stylist/recommendations";
         public final String SET_BUILDER = BASE + "/set-builder";
+        public final String STYLIST_FEEDBACK = BASE + "/stylist/feedback";
+        public final String STYLIST_SESSIONS = BASE + "/stylist/sessions";
     }
 
     /** BadgeRest (pk-api) - nhãn dán sản phẩm suy ra tự động (xem BadgeService javadoc), không cần
@@ -109,6 +111,8 @@ public class UrlConstant {
     @UtilityClass
     public static class Cart {
         public final String BASE = Storefront.BASE + "/cart/cart";
+        /** Thêm nhiều SKU một lần (all-or-nothing), giữ hàng cũ. */
+        public final String BATCH_ADD = BASE + "/batch-add";
     }
 
     /** WishlistRest (pk-api) - yêu thích theo spec FE (/storefront/product/customer/wishlist), bắt buộc

@@ -1,108 +1,277 @@
 package com.pk.core.business.service.impl;
 
-import lombok.RequiredArgsConstructor;
-
-import com.pk.core.business.repository.CategoryRepo;
-import com.pk.core.business.repository.ProductRepo;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pk.core.business.ai.AiAssembledResult;
+import com.pk.core.business.ai.AiBudgetBand;
+import com.pk.core.business.ai.AiDecoratedPick;
+import com.pk.core.business.ai.AiRecommendationOrchestrator;
+import com.pk.core.business.repository.AiStylistFeedbackRepo;
+import com.pk.core.business.repository.AiStylistSessionItemRepo;
+import com.pk.core.business.repository.AiStylistSessionRepo;
 import com.pk.core.business.service.AiStylistService;
+import com.pk.core.business.ai.AiProperties;
+import com.pk.core.common.exception.BusinessException;
+import com.pk.core.common.exception.ErrorCode;
+import com.pk.core.model.dto.request.StylistFeedbackRequestDto;
 import com.pk.core.model.dto.request.StylistRequestDto;
 import com.pk.core.model.dto.response.SetItemResponseDto;
 import com.pk.core.model.dto.response.SetResponseDto;
+import com.pk.core.model.dto.response.StylistFeedbackResponseDto;
+import com.pk.core.model.dto.response.StylistRecommendationListResponseDto;
 import com.pk.core.model.dto.response.StylistRecommendationResponseDto;
-import com.pk.core.model.entity.CategoryEntity;
-import com.pk.core.model.entity.ProductEntity;
+import com.pk.core.model.dto.response.StylistSessionItemResponseDto;
+import com.pk.core.model.dto.response.StylistSessionResponseDto;
+import com.pk.core.model.entity.AiStylistSessionEntity;
+import com.pk.core.model.entity.AiStylistSessionItemEntity;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
-/** HEURISTIC đơn giản (KHÔNG phải AI/ML thật - xem javadoc interface): lọc sản phẩm PUBLISHED theo
- * occasion + ngân sách (dùng lại ProductRepo.searchPublished có sẵn, occasion lọc thêm bằng Java vì
- * repo hiện không có tham số occasion), matchScore là dãy số giảm dần cố định theo thứ tự chọn - chỉ
- * mang tính minh hoạ thứ tự ưu tiên, không phản ánh độ tương đồng ngữ nghĩa thật. */
 @Service
 @RequiredArgsConstructor
 public class AiStylistServiceImpl implements AiStylistService {
 
-    private static final BigDecimal NO_MAX_PRICE = new BigDecimal("999999999999");
-    private static final double[] SCORES = {0.95, 0.9, 0.85, 0.8, 0.75};
+    private static final int REASON_MAX = 500;
+    private static final int FALLBACK_MAX = 255;
 
-    private final ProductRepo products;
-    private final CategoryRepo categories;
+    private final AiRecommendationOrchestrator orchestrator;
+    private final AiStylistSessionRepo sessions;
+    private final AiStylistSessionItemRepo sessionItems;
+    private final AiStylistFeedbackRepo feedback;
+    private final AiProperties properties;
+    private final ObjectMapper mapper;
 
-    @Transactional(readOnly = true)
+    @Transactional
     @Override
-    public List<StylistRecommendationResponseDto> recommend(StylistRequestDto req) {
-        List<ProductEntity> candidates = candidates(req);
-        List<StylistRecommendationResponseDto> result = new ArrayList<>();
-        int i = 0;
-        for (ProductEntity p : candidates) {
-            if (i >= SCORES.length) {
-                break;
-            }
-            result.add(new StylistRecommendationResponseDto("PRODUCT", p.getId(), p.getName(), p.getThumbnailUrl(),
-                    reasonFor(req), SCORES[i]));
-            i++;
+    public StylistRecommendationListResponseDto recommend(StylistRequestDto req, Long userId) {
+        normalize(req);
+        AiAssembledResult result = orchestrator.recommend(req, userId);
+        Long sessionId = persist(req, userId, result);
+        return new StylistRecommendationListResponseDto(result.source(), result.banner(), sessionId,
+                toRecommendations(result));
+    }
+
+    @Transactional
+    @Override
+    public SetResponseDto buildSet(StylistRequestDto req, Long userId) {
+        normalize(req);
+        AiAssembledResult result = orchestrator.buildSet(req, userId);
+        Long sessionId = persist(req, userId, result);
+        return toSet(req, result, sessionId);
+    }
+
+    @Transactional
+    @Override
+    public StylistFeedbackResponseDto feedback(StylistFeedbackRequestDto req, Long userId) {
+        requireUser(userId);
+        if (req.getSessionId() == null || req.getProductId() == null || req.getLiked() == null) {
+            throw invalidFeedback("Phản hồi thiếu phiên, sản phẩm hoặc liked");
         }
-        return result;
+        AiStylistSessionEntity session = sessions.findOne(req.getSessionId());
+        if (session == null || !userId.equals(session.getUserId())) {
+            throw new BusinessException(404, ErrorCode.AI_SESSION_NOT_FOUND, "Không tìm thấy phiên gợi ý");
+        }
+        if (!ownsProduct(session.getId(), req.getProductId())) {
+            throw invalidFeedback("Sản phẩm không thuộc phiên gợi ý");
+        }
+        feedback.upsert(session.getId(), userId, req.getProductId(), req.getLiked());
+        return new StylistFeedbackResponseDto(session.getId(), req.getProductId(), req.getLiked());
     }
 
     @Transactional(readOnly = true)
     @Override
-    public SetResponseDto buildSet(StylistRequestDto req) {
-        List<ProductEntity> candidates = candidates(req);
-
-        // Mỗi sản phẩm trong set thuộc 1 danh mục KHÁC NHAU (đa dạng bộ set) - tối đa 3 món.
-        Map<Long, ProductEntity> byCategory = new LinkedHashMap<>();
-        for (ProductEntity p : candidates) {
-            byCategory.putIfAbsent(p.getCategoryId(), p);
-            if (byCategory.size() >= 3) {
-                break;
-            }
+    public List<StylistSessionResponseDto> history(Long userId) {
+        requireUser(userId);
+        int limit = Math.max(1, properties.getHistoryLimit());
+        List<AiStylistSessionEntity> rows = sessions.recent(userId, limit);
+        List<StylistSessionResponseDto> out = new ArrayList<>();
+        if (rows == null) {
+            return out;
         }
+        for (AiStylistSessionEntity row : rows) {
+            out.add(toSession(row));
+        }
+        return out;
+    }
 
+    private void normalize(StylistRequestDto req) {
+        String scope = AiBudgetBand.scope(req);
+        if (!AiBudgetBand.ITEM.equals(scope) && !AiBudgetBand.SET.equals(scope)) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "budgetScope phải là ITEM hoặc SET")
+                    .withField("budgetScope");
+        }
+        req.setBudgetScope(scope);
+    }
+
+    private Long persist(StylistRequestDto req, Long userId, AiAssembledResult result) {
+        if (userId == null) {
+            return null;
+        }
+        AiStylistSessionEntity session = newSession(req, userId, result);
+        sessions.create(session);
+        saveItems(session.getId(), result.picks());
+        sessions.trimTo(userId, Math.max(1, properties.getHistoryLimit()));
+        return session.getId();
+    }
+
+    private AiStylistSessionEntity newSession(StylistRequestDto req, Long userId, AiAssembledResult result) {
+        AiStylistSessionEntity session = new AiStylistSessionEntity();
+        session.setUserId(userId);
+        session.setOccasion(req.getOccasion());
+        session.setStylesJson(stylesJson(req.getStyle()));
+        session.setBudget(req.getBudget());
+        session.setBudgetScope(req.getBudgetScope());
+        session.setRecipient(req.getRecipient());
+        session.setSource(result.source());
+        session.setFallbackReason(clip(result.fallbackReason(), FALLBACK_MAX));
+        return session;
+    }
+
+    private void saveItems(Long sessionId, List<AiDecoratedPick> picks) {
+        if (sessionId == null || picks == null) {
+            return;
+        }
+        int order = 0;
+        for (AiDecoratedPick pick : picks) {
+            sessionItems.create(toItem(sessionId, pick, order));
+            order++;
+        }
+    }
+
+    private static AiStylistSessionItemEntity toItem(Long sessionId, AiDecoratedPick pick, int order) {
+        AiStylistSessionItemEntity item = new AiStylistSessionItemEntity();
+        item.setSessionId(sessionId);
+        item.setProductId(pick.candidate().productId());
+        item.setSkuId(pick.candidate().skuId());
+        item.setReason(clip(pick.reason(), REASON_MAX));
+        item.setMatchScore(BigDecimal.valueOf(pick.matchScore()).setScale(4, RoundingMode.HALF_UP));
+        item.setSortOrder(order);
+        return item;
+    }
+
+    private List<StylistRecommendationResponseDto> toRecommendations(AiAssembledResult result) {
+        List<StylistRecommendationResponseDto> out = new ArrayList<>();
+        if (result.picks() == null) {
+            return out;
+        }
+        for (AiDecoratedPick pick : result.picks()) {
+            out.add(toRecommendation(pick, result.source()));
+        }
+        return out;
+    }
+
+    private static StylistRecommendationResponseDto toRecommendation(AiDecoratedPick pick, String source) {
+        return new StylistRecommendationResponseDto("PRODUCT", pick.candidate().productId(),
+                pick.candidate().name(), pick.candidate().slug(), pick.candidate().thumbnailUrl(),
+                pick.reason(), pick.matchScore(), pick.candidate().skuId(), pick.candidate().skuCode(),
+                pick.candidate().price(), pick.candidate().stock(), source);
+    }
+
+    private SetResponseDto toSet(StylistRequestDto req, AiAssembledResult result, Long sessionId) {
+        String name = "Set gợi ý cho dịp " + req.getOccasion();
+        String description = result.banner() == null
+                ? "Bộ trang sức gợi ý theo dịp và ngân sách"
+                : result.banner();
+        return new SetResponseDto("SET" + System.currentTimeMillis(), name, description, BigDecimal.ZERO,
+                toSetItems(result), result.source(), result.banner(), result.totalPrice(), sessionId);
+    }
+
+    private static List<SetItemResponseDto> toSetItems(AiAssembledResult result) {
         List<SetItemResponseDto> items = new ArrayList<>();
-        int sortOrder = 0;
-        for (ProductEntity p : byCategory.values()) {
-            CategoryEntity category = categories.findOne(p.getCategoryId());
-            items.add(new SetItemResponseDto(p.getId(), p.getName(), p.getThumbnailUrl(),
-                    category != null ? category.getName() : "Khác", sortOrder == 0, sortOrder));
-            sortOrder++;
+        if (result.picks() == null) {
+            return items;
         }
-
-        String code = "SET" + System.currentTimeMillis();
-        String name = "Set gợi ý" + (req.getOccasion() != null ? " cho dịp " + req.getOccasion() : "");
-        String description = "Bộ trang sức gợi ý tự động theo danh mục/ngân sách - sinh tức thời, "
-                + "không lưu lại (chưa có domain Set quản lý được ở admin)";
-        return new SetResponseDto(code, name, description, BigDecimal.ZERO, items);
+        int order = 0;
+        for (AiDecoratedPick pick : result.picks()) {
+            items.add(toSetItem(pick, result.source(), order));
+            order++;
+        }
+        return items;
     }
 
-    private List<ProductEntity> candidates(StylistRequestDto req) {
-        BigDecimal maxPrice = req.getBudget() != null ? req.getBudget() : NO_MAX_PRICE;
-        List<ProductEntity> all = products.searchPublished("", "", "", "", BigDecimal.ZERO, maxPrice);
-        if (req.getOccasion() == null || req.getOccasion().isBlank()) {
-            return all;
-        }
-        List<ProductEntity> byOccasion = all.stream()
-                .filter(p -> req.getOccasion().equalsIgnoreCase(p.getOccasion()))
-                .toList();
-        // Không có sản phẩm nào khớp đúng occasion -> dùng lại danh sách theo ngân sách thay vì trả
-        // rỗng (spec yêu cầu tối thiểu 3 gợi ý, dù không khớp tuyệt đối occasion vẫn nên có gợi ý).
-        return byOccasion.isEmpty() ? all : byOccasion;
+    private static SetItemResponseDto toSetItem(AiDecoratedPick pick, String source, int order) {
+        return new SetItemResponseDto(pick.candidate().productId(), pick.candidate().name(),
+                pick.candidate().slug(), pick.candidate().thumbnailUrl(), pick.candidate().categoryName(),
+                order == 0, order, pick.candidate().skuId(), pick.candidate().skuCode(),
+                pick.candidate().price(), pick.candidate().stock(), source);
     }
 
-    private static String reasonFor(StylistRequestDto req) {
-        StringBuilder sb = new StringBuilder("Phù hợp dịp ").append(req.getOccasion());
-        if (req.getBudget() != null) {
-            sb.append(", trong ngân sách ").append(req.getBudget());
+    private boolean ownsProduct(Long sessionId, Long productId) {
+        List<AiStylistSessionItemEntity> items = sessionItems.findBySessionId(sessionId);
+        if (items == null) {
+            return false;
         }
-        if (req.getRecipient() != null && !req.getRecipient().isBlank()) {
-            sb.append(", dành tặng ").append(req.getRecipient());
+        for (AiStylistSessionItemEntity item : items) {
+            if (productId.equals(item.getProductId())) {
+                return true;
+            }
         }
-        return sb.toString();
+        return false;
+    }
+
+    private StylistSessionResponseDto toSession(AiStylistSessionEntity row) {
+        return new StylistSessionResponseDto(row.getId(), row.getOccasion(), readStyles(row.getStylesJson()),
+                row.getBudget(), row.getBudgetScope(), row.getRecipient(), row.getSource(),
+                row.getFallbackReason(), row.getCreatedDate(), toHistoryItems(row.getId()));
+    }
+
+    private List<StylistSessionItemResponseDto> toHistoryItems(Long sessionId) {
+        List<AiStylistSessionItemEntity> rows = sessionItems.findBySessionId(sessionId);
+        List<StylistSessionItemResponseDto> out = new ArrayList<>();
+        if (rows == null) {
+            return out;
+        }
+        for (AiStylistSessionItemEntity row : rows) {
+            out.add(new StylistSessionItemResponseDto(row.getProductId(), row.getSkuId(), row.getReason(),
+                    row.getMatchScore(), row.getSortOrder()));
+        }
+        return out;
+    }
+
+    private String stylesJson(List<String> styles) {
+        if (styles == null || styles.isEmpty()) {
+            return null;
+        }
+        try {
+            return mapper.writeValueAsString(styles);
+        } catch (JsonProcessingException ex) {
+            throw BusinessException.badRequest(ErrorCode.VALIDATION_FAILED, "style không hợp lệ").withField("style");
+        }
+    }
+
+    private List<String> readStyles(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return mapper.readValue(json, new TypeReference<List<String>>() {
+            });
+        } catch (JsonProcessingException ex) {
+            return List.of();
+        }
+    }
+
+    private static void requireUser(Long userId) {
+        if (userId == null) {
+            throw BusinessException.unauthorized(ErrorCode.UNAUTHORIZED, "Cần đăng nhập");
+        }
+    }
+
+    private static BusinessException invalidFeedback(String message) {
+        return BusinessException.badRequest(ErrorCode.AI_FEEDBACK_INVALID, message);
+    }
+
+    private static String clip(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= max ? value : value.substring(0, max);
     }
 }

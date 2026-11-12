@@ -56,11 +56,14 @@ public class SecurityConfig {
                         .requestMatchers(v1(UrlConstant.Cart.BASE), v1(UrlConstant.Cart.BASE + "/**")).permitAll()
                         // Storefront đọc catalog: công khai, không cần đăng nhập (xem document/09-tong-hop-api-fe.md mục C)
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Product.BASE + "/**")).permitAll()
-                        // AI stylist/set-builder, badge: công khai theo spec FE (mục G/H). Checkout quote (mục D)
-                        // spec ghi "Không cần" nhưng thiết kế ở đây dùng addressId đã lưu (giống OrderRest.create),
-                        // không hỗ trợ khách vãng lai gửi địa chỉ rời rạc - CỐ Ý bắt buộc đăng nhập (rơi vào
-                        // anyRequest().authenticated() mặc định bên dưới, không thêm permitAll ở đây), khác spec.
-                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.BASE + "/**")).permitAll()
+                        // AI: feedback và lịch sử phiên bắt buộc đăng nhập (đặt TRƯỚC permitAll).
+                        // Gợi ý và set-builder công khai. Checkout quote (mục D) spec ghi "Không cần" nhưng
+                        // thiết kế ở đây dùng addressId đã lưu (giống OrderRest.create), không hỗ trợ khách
+                        // vãng lai gửi địa chỉ rời rạc - CỐ Ý bắt buộc đăng nhập (anyRequest bên dưới).
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.STYLIST_FEEDBACK)).authenticated()
+                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Ai.STYLIST_SESSIONS)).authenticated()
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.STYLIST_RECOMMENDATIONS)).permitAll()
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.SET_BUILDER)).permitAll()
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Badge.BASE)).permitAll()
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.PreOrder.CURRENT)).permitAll()
                         // CMS storefront (trang đã PUBLISHED theo slug) và render banner theo vị trí: công khai, chỉ GET.

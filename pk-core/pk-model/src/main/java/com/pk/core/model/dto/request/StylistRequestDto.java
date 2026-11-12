@@ -9,8 +9,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.util.List;
 
-/** Body chung cho POST /storefront/ai/stylist/recommendations và POST /storefront/ai/set-builder
- * (spec FE mô tả cả 2 dùng chung dạng "nhu cầu": occasion, style[], budget, recipient). */
+/** Body chung cho gợi ý stylist và set builder. budgetScope ITEM = ngân sách từng món, SET = cả bộ. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -23,6 +22,9 @@ public class StylistRequestDto {
     private List<String> style;
 
     private BigDecimal budget;
+
+    /** ITEM | SET. Bỏ trống = ITEM. */
+    private String budgetScope;
 
     private String recipient;
 }
