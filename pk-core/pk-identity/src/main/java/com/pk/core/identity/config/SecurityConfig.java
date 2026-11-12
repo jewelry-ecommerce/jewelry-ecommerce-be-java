@@ -80,7 +80,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Storefront.PRIVATE_FILES + "/**")).permitAll()
                         // Webhook cổng thanh toán: không có Bearer token, tự xác thực bằng chữ ký (mục F)
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/**")).permitAll()
-                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Payment.BASE + "/methods")).permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")

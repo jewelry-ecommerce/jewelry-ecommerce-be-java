@@ -62,7 +62,6 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
-    private final com.pk.core.business.payment.MomoProperties momo;
 
     private final OrderRepo orders;
     private final UserRepo users;
@@ -97,7 +96,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createNew(Long userId, CreateOrderRequestDto req) {
-        momo.validateMethod(req.getPaymentMethod());
+        requireCod(req.getPaymentMethod());
         CustomerAddressEntity address = addresses.findByIdAndUserId(req.getAddressId(), userId);
         if (address == null) {
             throw new ResourceNotFoundException("Địa chỉ giao hàng", "Address", req.getAddressId());
@@ -168,7 +167,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createGuestNew(GuestOrderRequestDto req, String guestCartId) {
-        momo.validateMethod(req.getPaymentMethod());
+        requireCod(req.getPaymentMethod());
         CustomerAddressEntity shipTo = new CustomerAddressEntity();
         shipTo.setRecipientName(req.getRecipientName().trim());
         shipTo.setPhone(req.getPhone().trim());
@@ -295,7 +294,6 @@ public class OrderServiceImpl implements OrderService {
         OrderEntity order = new OrderEntity(userId, paymentMethod, shippingMethod, address,
                 subtotal, productDiscount, voucherDiscount, BigDecimal.ZERO, appliedVoucherCode, noteText);
         order.setGuestEmail(guestEmail);
-        momo.validateAmount(paymentMethod, order.getGrandTotal());
         order.setCreatedId(opts.createdId());
         order.setSource(opts.source());
         orders.create(order);
@@ -323,7 +321,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // Thanh toán online (khác COD): tạo bản ghi Payment PENDING, cổng thanh toán sẽ gọi lại
-        // MoMo dùng IPN có chữ ký tại POST /storefront/payment/momo/ipn.
+        // POST /storefront/payment/{paymentId}/callback (paymentId = id vừa tạo) - xem PaymentService.
         // COD thì không tạo Payment (paymentStatus của đơn giữ nguyên UNPAID, thu tiền khi giao).
         if (!"COD".equalsIgnoreCase(order.getPaymentMethod())) {
             payments.create(new PaymentEntity(order.getId(), order.getPaymentMethod(), order.getGrandTotal()));
@@ -983,7 +981,6 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponseDto updateByAdmin(String code, OmsRequestDtos.OrderUpsert req, Long adminId) {
         OrderEntity order = adminOrder(code);
-        requireCod(order.getPaymentMethod());
         if (!ADMIN_EDITABLE.contains(order.getStatus())) {
             throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
                     "Chỉ sửa được đơn PENDING/CONFIRMED (hiện tại: " + order.getStatus() + ")",
@@ -1082,7 +1079,6 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponseDto confirmPaymentByAdmin(String code, String note) {
         OrderEntity order = adminOrder(code);
-        requireCod(order.getPaymentMethod());
         if (OrderEntity.CANCELLED.equals(order.getStatus()) || OrderEntity.RETURNED.equals(order.getStatus())) {
             throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
                     "Không xác nhận thanh toán cho đơn " + order.getStatus(), order.getStatus(), OrderEntity.PAID);
@@ -1152,13 +1148,6 @@ public class OrderServiceImpl implements OrderService {
             throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
                     "Đơn hàng " + order.getCode() + " vừa được cập nhật bởi thao tác khác, vui lòng tải lại",
                     order.getStatus(), toStatus);
-        }
-        OrderEntity latest = orders.findOne(order.getId());
-        order.setPaymentStatus(latest.getPaymentStatus());
-        order.setRefundedAmount(latest.getRefundedAmount());
-        if ("MOMO".equals(order.getPaymentMethod()) && (OrderEntity.SHIPPING.equals(toStatus) || OrderEntity.DELIVERED.equals(toStatus))
-                && !OrderEntity.PAID.equals(order.getPaymentStatus())) {
-            throw BusinessException.conflict(ErrorCode.PAYMENT_ALREADY_PROCESSED, "Đơn MoMo chưa thanh toán, chưa thể giao hàng.");
         }
     }
 

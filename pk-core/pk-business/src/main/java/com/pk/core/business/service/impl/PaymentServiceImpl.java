@@ -51,9 +51,6 @@ public class PaymentServiceImpl implements PaymentService {
                     "Cổng thanh toán online chưa được cấu hình");
         }
         PaymentEntity payment = payments.findOne(paymentId);
-        if (payment != null && "MOMO".equals(payment.getProvider())) {
-            throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED, "Giao dịch MoMo phải được xác nhận qua IPN MoMo.");
-        }
         if (payment == null) {
             throw new ResourceNotFoundException("Giao dịch thanh toán", "Payment", paymentId);
         }
