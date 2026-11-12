@@ -8,10 +8,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.util.List;
 
-/** Rút gọn so với Set object đầy đủ trong spec ({id, code, name, slug, description, heroImage,
- * bundleDiscountPercent, status, items[...], seo}) - đây là set SINH RA TỨC THỜI theo yêu cầu, KHÔNG
- * lưu DB (không có domain Set thật), nên bỏ các trường mang tính quản trị (id/slug/status/seo/
- * heroImage riêng, setItemId/allowedVariantIds trong item) - xem AiStylistServiceImpl. */
+/** Bộ sinh tức thời. source/banner cho biết gợi ý từ model hay luật dự phòng. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -23,4 +20,8 @@ public class SetResponseDto {
     private String description;
     private BigDecimal bundleDiscountPercent;
     private List<SetItemResponseDto> items;
+    private String source;
+    private String banner;
+    private BigDecimal totalPrice;
+    private Long sessionId;
 }

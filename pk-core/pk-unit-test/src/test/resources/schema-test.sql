@@ -1187,3 +1187,36 @@ CREATE TABLE promotion_scope_skus (
     sku_id       BIGINT      NOT NULL,
     PRIMARY KEY (promotion_id, scope_type, sku_id)
 );
+
+CREATE TABLE ai_stylist_sessions (
+    id              BIGINT PRIMARY KEY,
+    user_id         BIGINT       NOT NULL,
+    occasion        VARCHAR(100) NOT NULL,
+    styles_json     VARCHAR(4000),
+    budget          NUMERIC(18, 2),
+    budget_scope    VARCHAR(20)  NOT NULL DEFAULT 'ITEM',
+    recipient       VARCHAR(100),
+    source          VARCHAR(20)  NOT NULL,
+    fallback_reason VARCHAR(255),
+    created_date    TIMESTAMP    NOT NULL
+);
+
+CREATE TABLE ai_stylist_session_items (
+    id          BIGINT PRIMARY KEY,
+    session_id  BIGINT NOT NULL,
+    product_id  BIGINT NOT NULL,
+    sku_id      BIGINT,
+    reason      VARCHAR(500),
+    match_score NUMERIC(6, 4),
+    sort_order  INT    NOT NULL DEFAULT 0
+);
+
+CREATE TABLE ai_stylist_feedback (
+    id           BIGINT PRIMARY KEY,
+    session_id   BIGINT    NOT NULL,
+    user_id      BIGINT    NOT NULL,
+    product_id   BIGINT    NOT NULL,
+    liked        BOOLEAN   NOT NULL,
+    created_date TIMESTAMP NOT NULL,
+    updated_date TIMESTAMP
+);

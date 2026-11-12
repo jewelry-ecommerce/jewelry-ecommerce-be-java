@@ -75,6 +75,12 @@ public final class ErrorCode {
     public static final String VOUCHER_MIN_ORDER_NOT_MET = "VOUCHER_MIN_ORDER_NOT_MET";
     public static final String VOUCHER_NOT_STARTED = "VOUCHER_NOT_STARTED";
     public static final String VOUCHER_USAGE_LIMIT_REACHED = "VOUCHER_USAGE_LIMIT_REACHED";
+    public static final String AI_PROVIDER_UNAVAILABLE = "AI_PROVIDER_UNAVAILABLE";
+    public static final String AI_SET_INVALID = "AI_SET_INVALID";
+    public static final String AI_BUDGET_EXCEEDED = "AI_BUDGET_EXCEEDED";
+    public static final String AI_SESSION_NOT_FOUND = "AI_SESSION_NOT_FOUND";
+    public static final String AI_FEEDBACK_INVALID = "AI_FEEDBACK_INVALID";
+    public static final String CART_BATCH_FAILED = "CART_BATCH_FAILED";
 
     private ErrorCode() {
     }

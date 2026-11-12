@@ -25,6 +25,12 @@ public interface CartService {
      */
     CartSyncResponseDto addOrSync(Long userId, String guestId, CartSyncRequestDto req);
 
+    /**
+     * Thêm nhiều SKU, giữ nguyên hàng đang có. Tất cả dòng phải bán được và đủ tồn; một dòng lỗi thì không ghi
+     * dòng nào (400 CART_BATCH_FAILED). Không hạ số lượng như addOrSync.
+     */
+    CartSyncResponseDto batchAddStrict(Long userId, String guestId, CartSyncRequestDto req);
+
     /** Gộp giỏ vãng lai (guestId) vào giỏ tài khoản rồi xoá giỏ vãng lai. Bắt buộc đã đăng nhập. */
     CartSyncResponseDto merge(Long userId, String guestId);
 

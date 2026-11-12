@@ -64,6 +64,20 @@ public class CartRest extends AbstractRest {
         }
     }
 
+    /** Thêm nhiều SKU một lần, giữ hàng cũ. Một dòng lỗi thì không thêm dòng nào. */
+    @PostMapping(UrlConstant.Cart.BATCH_ADD)
+    public BaseRes batchAdd(@AuthenticationPrincipal SecurityUser principal,
+                            @RequestHeader(value = GUEST_HEADER, required = false) String guestId,
+                            @Valid @RequestBody CartSyncRequestDto request,
+                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(
+                    cartService.batchAddStrict(userId(principal), guest(guestId, httpRequest), request));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
     /** Đặt SỐ LƯỢNG CUỐI của một dòng (quantity = 0 là xoá dòng) - dùng khi FE sửa số lượng thay vì cộng dồn như POST. */
     @PutMapping(UrlConstant.Cart.BASE)
     public BaseRes setQuantity(@AuthenticationPrincipal SecurityUser principal,

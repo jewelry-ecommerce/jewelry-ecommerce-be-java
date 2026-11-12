@@ -111,6 +111,18 @@ public class CartServiceImpl implements CartService {
 
     @Transactional
     @Override
+    public CartSyncResponseDto batchAddStrict(Long userId, String guestId, CartSyncRequestDto req) {
+        Map<Long, Integer> qtyBySku = batchQuantities(req);
+        Map<Long, ProductSkuEntity> skus = requireSellable(qtyBySku);
+        CartEntity current = findCart(userId, guestId);
+        assertBatchFits(current, skus, qtyBySku);
+        CartEntity cart = current != null ? current : findOrCreateCart(userId, guestId);
+        addBatch(cart.getId(), skus, qtyBySku);
+        return respond(cart, new Outcome());
+    }
+
+    @Transactional
+    @Override
     public CartSyncResponseDto setQuantity(Long userId, String guestId, CartItemQuantityRequestDto req) {
         Long skuId = parseSkuId(req.getVariationId());
         if (req.getQuantity() == 0) {
@@ -249,6 +261,95 @@ public class CartServiceImpl implements CartService {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private Map<Long, Integer> batchQuantities(CartSyncRequestDto req) {
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw batchFailed("Danh sách thêm vào giỏ đang trống");
+        }
+        Map<Long, Integer> qtyBySku = new LinkedHashMap<>();
+        for (CartSyncItemRequestDto line : req.getItems()) {
+            rejectBatchSet(line);
+            if (line.getQuantity() < 1) {
+                throw batchFailed("Số lượng phải lớn hơn 0");
+            }
+            qtyBySku.merge(batchSkuId(line.getVariationId()), line.getQuantity(), this::sumQty);
+        }
+        return qtyBySku;
+    }
+
+    private void rejectBatchSet(CartSyncItemRequestDto line) {
+        if (line.getSetId() != null && !line.getSetId().isBlank()) {
+            throw batchFailed("Thêm hàng loạt chưa hỗ trợ bộ sản phẩm (setId)");
+        }
+    }
+
+    private Long batchSkuId(String variationId) {
+        if (variationId == null || variationId.isBlank()) {
+            throw batchFailed("Dòng giỏ hàng thiếu variationId");
+        }
+        try {
+            return Long.valueOf(variationId.trim());
+        } catch (NumberFormatException ex) {
+            throw batchFailed("variationId phải là số");
+        }
+    }
+
+    private int sumQty(int left, int right) {
+        long sum = (long) left + right;
+        if (sum > Integer.MAX_VALUE) {
+            throw batchFailed("Số lượng vượt quá giới hạn");
+        }
+        return (int) sum;
+    }
+
+    private Map<Long, ProductSkuEntity> requireSellable(Map<Long, Integer> qtyBySku) {
+        Map<Long, ProductSkuEntity> skus = new LinkedHashMap<>();
+        for (Long skuId : qtyBySku.keySet()) {
+            ProductSkuEntity sku = productSkus.findOne(skuId);
+            if (!sellable(sku)) {
+                throw batchFailed("Sản phẩm không còn bán (SKU " + skuId + ")");
+            }
+            skus.put(skuId, sku);
+        }
+        return skus;
+    }
+
+    private void assertBatchFits(CartEntity cart, Map<Long, ProductSkuEntity> skus, Map<Long, Integer> qtyBySku) {
+        for (Map.Entry<Long, Integer> line : qtyBySku.entrySet()) {
+            assertLineFits(cart, skus.get(line.getKey()), line.getValue());
+        }
+    }
+
+    private void assertLineFits(CartEntity cart, ProductSkuEntity sku, int qty) {
+        int available = sku.available();
+        if (available <= 0 && preOrder.appliesTo(sku)) {
+            return;
+        }
+        if (available <= 0) {
+            throw batchFailed("Sản phẩm \"" + sku.getName() + "\" đã hết hàng");
+        }
+        if ((long) existingQty(cart, sku.getId()) + qty > available) {
+            throw batchFailed("Sản phẩm \"" + sku.getName() + "\" chỉ còn " + available + " trong kho");
+        }
+    }
+
+    private int existingQty(CartEntity cart, Long skuId) {
+        if (cart == null) {
+            return 0;
+        }
+        CartItemEntity row = cartItems.findByCartIdAndSkuId(cart.getId(), skuId);
+        return row == null ? 0 : row.getQuantity();
+    }
+
+    private void addBatch(Long cartId, Map<Long, ProductSkuEntity> skus, Map<Long, Integer> qtyBySku) {
+        for (Map.Entry<Long, Integer> line : qtyBySku.entrySet()) {
+            addCapped(cartId, skus.get(line.getKey()), line.getValue(), new Outcome());
+        }
+    }
+
+    private static BusinessException batchFailed(String message) {
+        return BusinessException.badRequest(ErrorCode.CART_BATCH_FAILED, message);
+    }
 
     /** Cộng `qty` của SKU vào giỏ, chặn ở tồn kho còn bán được; ghi lý do vào outcome nếu bị chặn/giảm. */
     private void addCapped(Long cartId, ProductSkuEntity sku, int qty, Outcome outcome) {

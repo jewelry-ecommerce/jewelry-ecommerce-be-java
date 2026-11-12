@@ -103,6 +103,11 @@ public static final String ORDER_NOTES = "order_notes";
     public static final String SEARCH_KEYWORDS = "search_keywords";
     public static final String SEARCH_HISTORY = "search_history";
 
+    // AI Stylist: phiên gợi ý, món trong phiên, feedback thích/không thích (V40)
+    public static final String AI_STYLIST_SESSIONS = "ai_stylist_sessions";
+    public static final String AI_STYLIST_SESSION_ITEMS = "ai_stylist_session_items";
+    public static final String AI_STYLIST_FEEDBACK = "ai_stylist_feedback";
+
     private TableConstant() {
     }
 }

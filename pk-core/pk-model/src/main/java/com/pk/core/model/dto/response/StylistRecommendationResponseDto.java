@@ -5,10 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Đơn giản hoá so với spec: chỉ trả type=PRODUCT (chưa có domain Set để gợi ý type=SET thật), kèm
- * name/thumbnailUrl để FE hiển thị luôn (spec gốc không có 2 trường này, chỉ có {type,id,reason,
- * matchScore} - thêm cho tiện, không phá cấu trúc gốc). Xem AiStylistServiceImpl về cách suy ra
- * matchScore/reason (heuristic đơn giản, KHÔNG phải mô hình AI/ML thật). */
+import java.math.BigDecimal;
+
+/** Một món gợi ý. source = AI hoặc FALLBACK (cùng nguồn của cả danh sách). */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +17,13 @@ public class StylistRecommendationResponseDto {
     private String type;
     private Long id;
     private String name;
+    private String slug;
     private String thumbnailUrl;
     private String reason;
     private double matchScore;
+    private Long skuId;
+    private String skuCode;
+    private BigDecimal price;
+    private Integer stock;
+    private String source;
 }
