@@ -3,6 +3,7 @@ package com.pk.core.api.rest;
 import org.springframework.web.bind.annotation.RequestMapping;
 import lombok.RequiredArgsConstructor;
 
+import com.pk.core.business.service.AiAssistantService;
 import com.pk.core.business.service.AiStylistService;
 import com.pk.core.business.web.AbstractRest;
 import com.pk.core.common.exception.BusinessException;
@@ -10,6 +11,7 @@ import com.pk.core.common.exception.ErrorCode;
 import com.pk.core.common.web.BaseRes;
 import com.pk.core.identity.security.model.SecurityUser;
 import com.pk.core.model.constant.UrlConstant;
+import com.pk.core.model.dto.request.AssistantMessageRequestDto;
 import com.pk.core.model.dto.request.StylistFeedbackRequestDto;
 import com.pk.core.model.dto.request.StylistRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,6 +30,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiRest extends AbstractRest {
 
     private final AiStylistService aiStylistService;
+    private final AiAssistantService aiAssistantService;
+
+    @PostMapping(UrlConstant.Ai.ASSISTANT)
+    public BaseRes assistant(@Valid @RequestBody AssistantMessageRequestDto request,
+                             HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(aiAssistantService.chat(request.getMessage()));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
 
     @PostMapping(UrlConstant.Ai.STYLIST_RECOMMENDATIONS)
     public BaseRes recommend(@AuthenticationPrincipal SecurityUser principal,

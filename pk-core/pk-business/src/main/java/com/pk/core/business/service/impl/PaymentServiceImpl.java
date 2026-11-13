@@ -51,6 +51,10 @@ public class PaymentServiceImpl implements PaymentService {
                     "Cổng thanh toán online chưa được cấu hình");
         }
         PaymentEntity payment = payments.findOne(paymentId);
+        if (payment != null && "VNPAY".equals(payment.getProvider())) {
+            throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED,
+                    "Giao dịch VNPay phải được xác nhận qua IPN VNPay.");
+        }
         if (payment == null) {
             throw new ResourceNotFoundException("Giao dịch thanh toán", "Payment", paymentId);
         }

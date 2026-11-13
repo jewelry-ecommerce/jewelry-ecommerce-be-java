@@ -15,6 +15,8 @@ public interface OrderRepo extends PkRepo<OrderEntity, Long> {
      * có người dùng đăng nhập nên không có userId để lọc theo IDOR như findByCodeAndUserId). */
     OrderEntity findByCode(@Param("code") String code);
 
+    OrderEntity findByIdForUpdate(@Param("id") Long id);
+
     List<OrderEntity> findByUserId(@Param("userId") Long userId);
 
     /** Tìm đơn cho Admin mục L (GET /admin/orders) - lọc rỗng = trả tất cả (cùng quy ước
