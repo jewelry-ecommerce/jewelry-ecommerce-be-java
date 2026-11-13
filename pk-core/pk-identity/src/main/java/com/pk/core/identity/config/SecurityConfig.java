@@ -62,6 +62,7 @@ public class SecurityConfig {
                         // vãng lai gửi địa chỉ rời rạc - CỐ Ý bắt buộc đăng nhập (anyRequest bên dưới).
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.STYLIST_FEEDBACK)).authenticated()
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Ai.STYLIST_SESSIONS)).authenticated()
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.ASSISTANT)).permitAll()
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.STYLIST_RECOMMENDATIONS)).permitAll()
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.SET_BUILDER)).permitAll()
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Badge.BASE)).permitAll()
@@ -78,6 +79,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Storefront.FILES + "/**")).permitAll()
                         // File riêng tư (CSV import/export): chỉ GET, tự xác thực bằng chữ ký + hạn trong query (exp, sig).
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Storefront.PRIVATE_FILES + "/**")).permitAll()
+                        // VNPay: start/return/ipn và xác nhận demo không có Bearer; chữ ký HMAC xác thực.
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/vnpay/start")).permitAll()
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/vnpay/demo/confirm")).permitAll()
+                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Payment.BASE + "/vnpay/return")).permitAll()
+                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Payment.BASE + "/vnpay/ipn")).permitAll()
                         // Webhook cổng thanh toán: không có Bearer token, tự xác thực bằng chữ ký (mục F)
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/**")).permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()

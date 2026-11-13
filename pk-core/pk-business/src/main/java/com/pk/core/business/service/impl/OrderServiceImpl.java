@@ -18,6 +18,7 @@ import com.pk.core.business.repository.OrderTimelineRepo;
 import com.pk.core.business.repository.PaymentRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
+import com.pk.core.business.payment.VnpayProperties;
 import com.pk.core.business.service.OrderService;
 import com.pk.core.business.service.PromotionPricingService;
 import com.pk.core.business.service.PreOrderService;
@@ -63,6 +64,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
+    private final VnpayProperties vnpay;
     private final OrderRepo orders;
     private final UserRepo users;
     private final OrderItemRepo orderItems;
@@ -96,7 +98,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createNew(Long userId, CreateOrderRequestDto req) {
-        requireCod(req.getPaymentMethod());
+        vnpay.validateMethod(req.getPaymentMethod());
         CustomerAddressEntity address = addresses.findByIdAndUserId(req.getAddressId(), userId);
         if (address == null) {
             throw new ResourceNotFoundException("Địa chỉ giao hàng", "Address", req.getAddressId());
@@ -167,7 +169,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createGuestNew(GuestOrderRequestDto req, String guestCartId) {
-        requireCod(req.getPaymentMethod());
+        vnpay.validateMethod(req.getPaymentMethod());
         CustomerAddressEntity shipTo = new CustomerAddressEntity();
         shipTo.setRecipientName(req.getRecipientName().trim());
         shipTo.setPhone(req.getPhone().trim());
@@ -264,6 +266,7 @@ public class OrderServiceImpl implements OrderService {
     private OrderResponseDto placeOrder(Long userId, String guestEmail, String guestCartId, CustomerAddressEntity address,
                                         String paymentMethod, String shippingMethod, String voucherCode, String noteText,
                                         List<OrderItemRequestDto> requestItems, PlaceOpts opts) {
+        paymentMethod = vnpay.canonical(paymentMethod);
         // Gộp trùng skuId (client lỡ gửi 2 dòng cùng 1 SKU) để chỉ giữ chỗ tồn kho + tạo 1 dòng duy nhất.
         Map<Long, Integer> qtyBySku = new LinkedHashMap<>();
         for (OrderItemRequestDto line : requestItems) {
@@ -294,6 +297,7 @@ public class OrderServiceImpl implements OrderService {
         OrderEntity order = new OrderEntity(userId, paymentMethod, shippingMethod, address,
                 subtotal, productDiscount, voucherDiscount, BigDecimal.ZERO, appliedVoucherCode, noteText);
         order.setGuestEmail(guestEmail);
+        vnpay.validateAmount(paymentMethod, order.getGrandTotal());
         order.setCreatedId(opts.createdId());
         order.setSource(opts.source());
         orders.create(order);
@@ -320,12 +324,8 @@ public class OrderServiceImpl implements OrderService {
             voucherService.applyUsage(voucher.getId(), voucher.getCode());
         }
 
-        // Thanh toán online (khác COD): tạo bản ghi Payment PENDING, cổng thanh toán sẽ gọi lại
-        // POST /storefront/payment/{paymentId}/callback (paymentId = id vừa tạo) - xem PaymentService.
-        // COD thì không tạo Payment (paymentStatus của đơn giữ nguyên UNPAID, thu tiền khi giao).
-        if (!"COD".equalsIgnoreCase(order.getPaymentMethod())) {
-            payments.create(new PaymentEntity(order.getId(), order.getPaymentMethod(), order.getGrandTotal()));
-        }
+        // COD không tạo Payment. VNPay tạo Payment PENDING và mã giao dịch để ký URL/IPN.
+        openOnlinePayment(order);
 
         return toDto(order);
     }
@@ -589,6 +589,7 @@ public class OrderServiceImpl implements OrderService {
                     "Không thể chuyển đơn hàng từ trạng thái " + oldStatus + " sang " + newStatus,
                     oldStatus, newStatus);
         }
+        rejectUnpaidVnpayShipment(order, newStatus);
 
         guardTransition(order, newStatus);
         order.setStatus(newStatus);
@@ -802,11 +803,33 @@ public class OrderServiceImpl implements OrderService {
         return null;
     }
 
-    /** Phạm vi đồ án chỉ COD: storefront lẫn admin đều từ chối phương thức khác (400, mã ổn định cho FE). */
+    /** Admin tạo đơn vẫn chỉ COD. Storefront chấp nhận COD hoặc VNPay Sandbox qua {@link VnpayProperties}. */
     private static void requireCod(String paymentMethod) {
         if (paymentMethod != null && !paymentMethod.isBlank() && !"COD".equalsIgnoreCase(paymentMethod.trim())) {
             throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED, "Hiện chỉ hỗ trợ thanh toán COD");
         }
+    }
+
+    private static void requireEditableMethod(OrderEntity order, String requested) {
+        if (requested == null || requested.isBlank() || requested.trim().equalsIgnoreCase(order.getPaymentMethod())) return;
+        requireCod(requested);
+    }
+
+    private void openOnlinePayment(OrderEntity order) {
+        if (order.getPaymentMethod() == null || "COD".equalsIgnoreCase(order.getPaymentMethod())) return;
+        PaymentEntity payment = new PaymentEntity(order.getId(), order.getPaymentMethod(), order.getGrandTotal());
+        payments.create(payment);
+        if (payment.getId() == null) throw new IllegalStateException("Thiếu mã giao dịch VNPay");
+        payment.setGatewayOrderId(order.getCode() + payment.getId());
+        payment.touch();
+        payments.update(payment);
+    }
+
+    private static void rejectUnpaidVnpayShipment(OrderEntity order, String toStatus) {
+        boolean shipping = OrderEntity.SHIPPING.equals(toStatus) || OrderEntity.DELIVERED.equals(toStatus);
+        if (!shipping || !VnpayProperties.PROVIDER.equals(order.getPaymentMethod())) return;
+        if (OrderEntity.PAID.equals(order.getPaymentStatus())) return;
+        throw BusinessException.conflict(ErrorCode.PAYMENT_ALREADY_PROCESSED, "Đơn VNPay chưa thanh toán, chưa thể giao hàng.");
     }
 
     private static String fullName(String lastName, String firstName) {
@@ -986,7 +1009,7 @@ public class OrderServiceImpl implements OrderService {
                     "Chỉ sửa được đơn PENDING/CONFIRMED (hiện tại: " + order.getStatus() + ")",
                     order.getStatus(), order.getStatus());
         }
-        requireCod(req.getPaymentMethod());
+        requireEditableMethod(order, req.getPaymentMethod());
         // Khoá dòng đơn bằng CAS trạng thái (UPDATE status = status WHERE status = đã đọc): huỷ/đổi trạng thái chen vào giữa
         // -> 409; sửa song song được xếp hàng. Đọc lại đơn SAU khi giữ khoá để không ghi đè thay đổi của lần sửa trước.
         guardTransition(order, order.getStatus());
@@ -1079,6 +1102,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponseDto confirmPaymentByAdmin(String code, String note) {
         OrderEntity order = adminOrder(code);
+        if (VnpayProperties.PROVIDER.equals(order.getPaymentMethod())) {
+            throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED,
+                    "Thanh toán VNPay được xác nhận qua cổng Sandbox, không xác nhận tay.");
+        }
         if (OrderEntity.CANCELLED.equals(order.getStatus()) || OrderEntity.RETURNED.equals(order.getStatus())) {
             throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,
                     "Không xác nhận thanh toán cho đơn " + order.getStatus(), order.getStatus(), OrderEntity.PAID);

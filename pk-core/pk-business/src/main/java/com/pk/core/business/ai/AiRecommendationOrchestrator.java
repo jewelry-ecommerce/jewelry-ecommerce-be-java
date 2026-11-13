@@ -49,6 +49,11 @@ public class AiRecommendationOrchestrator {
         this.rules = rules;
     }
 
+    public List<AiCandidate> openCatalog() {
+        List<ProductEntity> found = products.searchPublished("", "", "", "", BigDecimal.ZERO, OPEN_MAX);
+        return cap(enrich(found), Math.max(1, properties.getMaxCandidates()));
+    }
+
     public AiAssembledResult recommend(StylistRequestDto request, Long userId) {
         List<AiCandidate> pool = loadCandidates(request, userId);
         if (pool.isEmpty()) {

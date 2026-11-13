@@ -53,6 +53,7 @@ public final class ErrorCode {
     public static final String CMS_BLOCK_CONFIG_INVALID = "CMS_BLOCK_CONFIG_INVALID";
     public static final String PAYMENT_METHOD_UNSUPPORTED = "PAYMENT_METHOD_UNSUPPORTED";
     public static final String PAYMENT_NOT_CONFIGURED = "PAYMENT_NOT_CONFIGURED";
+    public static final String VNPAY_UNAVAILABLE = "VNPAY_UNAVAILABLE";
     public static final String PHONE_TAKEN = "PHONE_TAKEN";
     public static final String REFRESH_EXPIRED = "REFRESH_EXPIRED";
     public static final String REFRESH_INVALID = "REFRESH_INVALID";

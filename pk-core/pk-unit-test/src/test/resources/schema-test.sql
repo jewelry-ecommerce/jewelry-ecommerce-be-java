@@ -365,6 +365,8 @@ CREATE TABLE payments (
     order_id       BIGINT NOT NULL REFERENCES orders (id),
     provider       VARCHAR(30) NOT NULL,
     transaction_id VARCHAR(100),
+    gateway_order_id VARCHAR(100) UNIQUE,
+    checkout_url TEXT,
     amount         NUMERIC(15, 0) NOT NULL,
     status         VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     signature      VARCHAR(500),
