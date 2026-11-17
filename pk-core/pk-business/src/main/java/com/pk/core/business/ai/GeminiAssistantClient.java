@@ -55,9 +55,7 @@ public class GeminiAssistantClient {
     private AssistantReplyParser.Draft invoke(String message, List<AiCandidate> catalog) {
         try {
             String raw = client.post()
-                    .uri(builder -> builder.path("/models/{model}:generateContent")
-                            .queryParam("key", properties.getApiKey())
-                            .build(model()))
+                    .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model(), properties.getApiKey()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body(message, catalog))
                     .retrieve()
@@ -91,7 +89,8 @@ public class GeminiAssistantClient {
         content.put("role", "user");
         content.put("parts", List.of(Map.of("text", prompt(message, catalog))));
         Map<String, Object> generation = new LinkedHashMap<>();
-        generation.put("maxOutputTokens", properties.getMaxOutputTokens());
+        generation.put("maxOutputTokens", properties.getAssistantMaxOutputTokens());
+        generation.put("thinkingConfig", Map.of("thinkingLevel", properties.getAssistantThinkingLevel()));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("contents", List.of(content));
         payload.put("generationConfig", generation);
@@ -100,27 +99,40 @@ public class GeminiAssistantClient {
 
     private String prompt(String message, List<AiCandidate> catalog) {
         StringBuilder text = new StringBuilder();
-        text.append("Bạn là nhân viên shop trang sức. Xưng shop, gọi khách là bạn, lịch sự, có chữ ạ. ");
-        text.append("Shop chào trước. Không bảo khách chào shop. ");
-        text.append("Trả lời tiếng Việt, ngắn. Không dùng các từ trợ lý, stylist, chat, AI. ");
-        text.append("Khách chỉ chào thì chào lại và hỏi món họ cần, productIds để trống. ");
-        text.append("Khách có thể hỏi về dịp, chất liệu, cách giữ gìn, kích cỡ và quà tặng. ");
-        text.append("Chỉ trả JSON {\"reply\":string,\"productIds\":[number]}. ");
-        text.append("productIds chỉ lấy id trong danh sách, tối đa 4, để trống nếu câu không cần gợi ý món. ");
-        text.append("Không bịa sản phẩm ngoài danh sách.\nKhách: ").append(message);
-        for (AiCandidate candidate : catalog) {
-            text.append("\n- id=").append(candidate.productId())
-                    .append(" name=").append(candidate.name())
-                    .append(" price=").append(candidate.price())
-                    .append(" category=").append(candidate.categoryName());
-        }
+        text.append(role());
+        text.append(properties.getShopBrief() == null ? "" : properties.getShopBrief());
+        text.append(catalog.isEmpty() ? emptyCatalog() : " Chỉ gợi ý id trong danh sách dưới.");
+        text.append("\nKhách: ").append(message);
+        appendProducts(text, catalog);
         int max = Math.max(500, properties.getMaxInputChars());
         return text.length() <= max ? text.toString() : text.substring(0, max);
     }
 
+    private static String role() {
+        return "Bạn là nhân viên shop trang sức. Xưng shop, gọi khách là bạn, lịch sự, có chữ ạ. "
+                + "Trả lời tiếng Việt, ngắn. Không dùng các từ trợ lý, stylist, chat, AI. "
+                + "Chỉ trả JSON {\"reply\":string,\"productIds\":[number]}. "
+                + "productIds tối đa 4, để trống nếu câu không cần gợi ý món. ";
+    }
+
+    private static String emptyCatalog() {
+        return " Không có sản phẩm khớp câu này. Không bịa tên hoặc giá. "
+                + "Câu chào hoặc câu về shop thì trả lời theo tờ thông tin, productIds để trống.";
+    }
+
+    private static void appendProducts(StringBuilder text, List<AiCandidate> catalog) {
+        for (AiCandidate candidate : catalog) {
+            text.append("\n- id=").append(candidate.productId())
+                    .append(" name=").append(candidate.name())
+                    .append(" price=").append(candidate.price())
+                    .append(" category=").append(candidate.categoryName())
+                    .append(" material=").append(candidate.material())
+                    .append(" stock=").append(candidate.stock());
+        }
+    }
+
     private String model() {
-        String configured = properties.getAssistantModel();
-        return configured == null || configured.isBlank() ? properties.getModel() : configured;
+        return properties.chatModel();
     }
 
     private static String firstText(JsonNode root) {

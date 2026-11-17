@@ -27,16 +27,25 @@ public class AiProperties {
     private String baseUrl = "https://generativelanguage.googleapis.com/v1beta";
 
     /** Model xếp hạng stylist. Chat dùng assistantModel. */
-    private String model = "gemini-2.0-flash";
+    private String model = "gemini-3.5-flash-lite";
 
-    /** Model chat, cùng dòng model đồ án tham chiếu đang trả lời được. */
-    private String assistantModel = "gemini-2.5-flash-lite";
+    /** Model chat. Bản Pro, câu tư vấn chắc hơn flash-lite. */
+    private String assistantModel = "gemini-3.1-pro-preview";
+
+    /** Model còn mở khi env vẫn trỏ gemini-2.* (Google trả 404). */
+    private String currentModel = "gemini-3.1-pro-preview";
+
+    /** Độ suy nghĩ của chat. HIGH để câu tư vấn chắc hơn. */
+    private String assistantThinkingLevel = "HIGH";
+
+    /** Trần token câu chat. HIGH cần dư chỗ cho phần suy nghĩ và câu trả lời. */
+    private int assistantMaxOutputTokens = 8192;
 
     /** Timeout cuộc gọi xếp hạng (spec EP-05 ~3s). */
     private Duration timeout = Duration.ofSeconds(3);
 
-    /** Chat cần dài hơn 3 giây để câu chào không bị cắt. */
-    private Duration assistantTimeout = Duration.ofSeconds(8);
+    /** Chat Pro mức HIGH có thể mất gần một phút. */
+    private Duration assistantTimeout = Duration.ofSeconds(60);
 
     private int maxCandidates = 24;
 
@@ -59,10 +68,52 @@ public class AiProperties {
 
     private int maxInputChars = 6000;
 
+    /** Số món một lần function search_products được trả. */
+    private int assistantRetrievalLimit = 8;
+
+    /** Chat Completions kiểu OpenAI. LiteLLM proxy dùng cùng đường này. */
+    private String chatBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
+
+    /** Câu hỗ trợ khách cần ổn định. OpenAI khuyên khoảng 0.2, không phải 1. */
+    private double temperature = 0.2;
+
+    /** Cùng prefix system + tool thì cùng key để cache routing. */
+    private String promptCacheKey = "jewelry-shop-assistant";
+
+    private String promptCacheRetention = "in_memory";
+
+    /** Vòng gọi tool trước câu trả lời cuối. */
+    private int assistantMaxToolRounds = 1;
+
+    /** Tờ thông tin shop, nằm trong bộ nhớ. Câu phí ship và thanh toán không query sản phẩm. */
+    private String shopBrief = "Shop bán trang sức. Khách xem sản phẩm, thêm vào giỏ rồi đặt hàng. "
+            + "Thanh toán COD hoặc MoMo. Phí giao hàng hiện là 0 đồng. "
+            + "Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.";
+
     public boolean providerReady() {
         return enabled
                 && PROVIDER_GEMINI.equalsIgnoreCase(provider)
                 && apiKey != null
                 && !apiKey.isBlank();
+    }
+
+    public String chatModel() {
+        return usable(assistantModel, model);
+    }
+
+    public String rankingModel() {
+        return usable(model, currentModel);
+    }
+
+    private String usable(String preferred, String alternate) {
+        String chosen = blank(preferred) ? alternate : preferred.trim();
+        if (chosen != null && chosen.startsWith("gemini-2.")) {
+            return blank(currentModel) ? chosen : currentModel.trim();
+        }
+        return chosen;
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
     }
 }

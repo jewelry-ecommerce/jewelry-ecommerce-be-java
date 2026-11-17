@@ -56,9 +56,7 @@ public class GeminiAiRankingProvider implements AiRankingProvider {
     private AiRankingResult invoke(StylistRequestDto request, List<AiCandidate> candidates, boolean setMode) {
         try {
             String raw = client.post()
-                    .uri(builder -> builder.path("/models/{model}:generateContent")
-                            .queryParam("key", properties.getApiKey())
-                            .build(properties.getModel()))
+                    .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), properties.rankingModel(), properties.getApiKey()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body(request, candidates, setMode))
                     .retrieve()

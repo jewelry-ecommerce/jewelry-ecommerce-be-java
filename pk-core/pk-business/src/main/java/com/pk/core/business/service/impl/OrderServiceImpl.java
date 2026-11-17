@@ -18,7 +18,7 @@ import com.pk.core.business.repository.OrderTimelineRepo;
 import com.pk.core.business.repository.PaymentRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
-import com.pk.core.business.payment.VnpayProperties;
+import com.pk.core.business.payment.MomoProperties;
 import com.pk.core.business.service.OrderService;
 import com.pk.core.business.service.PromotionPricingService;
 import com.pk.core.business.service.PreOrderService;
@@ -64,7 +64,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
-    private final VnpayProperties vnpay;
+    private final MomoProperties momo;
     private final OrderRepo orders;
     private final UserRepo users;
     private final OrderItemRepo orderItems;
@@ -98,7 +98,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createNew(Long userId, CreateOrderRequestDto req) {
-        vnpay.validateMethod(req.getPaymentMethod());
+        momo.validateMethod(req.getPaymentMethod());
         CustomerAddressEntity address = addresses.findByIdAndUserId(req.getAddressId(), userId);
         if (address == null) {
             throw new ResourceNotFoundException("Địa chỉ giao hàng", "Address", req.getAddressId());
@@ -169,7 +169,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponseDto createGuestNew(GuestOrderRequestDto req, String guestCartId) {
-        vnpay.validateMethod(req.getPaymentMethod());
+        momo.validateMethod(req.getPaymentMethod());
         CustomerAddressEntity shipTo = new CustomerAddressEntity();
         shipTo.setRecipientName(req.getRecipientName().trim());
         shipTo.setPhone(req.getPhone().trim());
@@ -266,7 +266,7 @@ public class OrderServiceImpl implements OrderService {
     private OrderResponseDto placeOrder(Long userId, String guestEmail, String guestCartId, CustomerAddressEntity address,
                                         String paymentMethod, String shippingMethod, String voucherCode, String noteText,
                                         List<OrderItemRequestDto> requestItems, PlaceOpts opts) {
-        paymentMethod = vnpay.canonical(paymentMethod);
+        paymentMethod = momo.canonical(paymentMethod);
         // Gộp trùng skuId (client lỡ gửi 2 dòng cùng 1 SKU) để chỉ giữ chỗ tồn kho + tạo 1 dòng duy nhất.
         Map<Long, Integer> qtyBySku = new LinkedHashMap<>();
         for (OrderItemRequestDto line : requestItems) {
@@ -297,7 +297,7 @@ public class OrderServiceImpl implements OrderService {
         OrderEntity order = new OrderEntity(userId, paymentMethod, shippingMethod, address,
                 subtotal, productDiscount, voucherDiscount, BigDecimal.ZERO, appliedVoucherCode, noteText);
         order.setGuestEmail(guestEmail);
-        vnpay.validateAmount(paymentMethod, order.getGrandTotal());
+        momo.validateAmount(paymentMethod, order.getGrandTotal());
         order.setCreatedId(opts.createdId());
         order.setSource(opts.source());
         orders.create(order);
@@ -324,7 +324,7 @@ public class OrderServiceImpl implements OrderService {
             voucherService.applyUsage(voucher.getId(), voucher.getCode());
         }
 
-        // COD không tạo Payment. VNPay tạo Payment PENDING và mã giao dịch để ký URL/IPN.
+        // COD không tạo Payment. MoMo tạo Payment PENDING và mã giao dịch để đối soát IPN.
         openOnlinePayment(order);
 
         return toDto(order);
@@ -589,7 +589,7 @@ public class OrderServiceImpl implements OrderService {
                     "Không thể chuyển đơn hàng từ trạng thái " + oldStatus + " sang " + newStatus,
                     oldStatus, newStatus);
         }
-        rejectUnpaidVnpayShipment(order, newStatus);
+        rejectUnpaidMomoShipment(order, newStatus);
 
         guardTransition(order, newStatus);
         order.setStatus(newStatus);
@@ -803,7 +803,7 @@ public class OrderServiceImpl implements OrderService {
         return null;
     }
 
-    /** Admin tạo đơn vẫn chỉ COD. Storefront chấp nhận COD hoặc VNPay Sandbox qua {@link VnpayProperties}. */
+    /** Admin tạo đơn vẫn chỉ COD. Storefront chấp nhận COD hoặc MoMo. */
     private static void requireCod(String paymentMethod) {
         if (paymentMethod != null && !paymentMethod.isBlank() && !"COD".equalsIgnoreCase(paymentMethod.trim())) {
             throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED, "Hiện chỉ hỗ trợ thanh toán COD");
@@ -819,17 +819,17 @@ public class OrderServiceImpl implements OrderService {
         if (order.getPaymentMethod() == null || "COD".equalsIgnoreCase(order.getPaymentMethod())) return;
         PaymentEntity payment = new PaymentEntity(order.getId(), order.getPaymentMethod(), order.getGrandTotal());
         payments.create(payment);
-        if (payment.getId() == null) throw new IllegalStateException("Thiếu mã giao dịch VNPay");
+        if (payment.getId() == null) throw new IllegalStateException("Thiếu mã giao dịch MoMo");
         payment.setGatewayOrderId(order.getCode() + payment.getId());
         payment.touch();
         payments.update(payment);
     }
 
-    private static void rejectUnpaidVnpayShipment(OrderEntity order, String toStatus) {
+    private static void rejectUnpaidMomoShipment(OrderEntity order, String toStatus) {
         boolean shipping = OrderEntity.SHIPPING.equals(toStatus) || OrderEntity.DELIVERED.equals(toStatus);
-        if (!shipping || !VnpayProperties.PROVIDER.equals(order.getPaymentMethod())) return;
+        if (!shipping || !MomoProperties.PROVIDER.equals(order.getPaymentMethod())) return;
         if (OrderEntity.PAID.equals(order.getPaymentStatus())) return;
-        throw BusinessException.conflict(ErrorCode.PAYMENT_ALREADY_PROCESSED, "Đơn VNPay chưa thanh toán, chưa thể giao hàng.");
+        throw BusinessException.conflict(ErrorCode.PAYMENT_ALREADY_PROCESSED, "Đơn MoMo chưa thanh toán, chưa thể giao hàng.");
     }
 
     private static String fullName(String lastName, String firstName) {
@@ -1102,9 +1102,9 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponseDto confirmPaymentByAdmin(String code, String note) {
         OrderEntity order = adminOrder(code);
-        if (VnpayProperties.PROVIDER.equals(order.getPaymentMethod())) {
+        if (MomoProperties.PROVIDER.equals(order.getPaymentMethod())) {
             throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED,
-                    "Thanh toán VNPay được xác nhận qua cổng Sandbox, không xác nhận tay.");
+                    "Thanh toán MoMo được xác nhận qua IPN, không xác nhận tay.");
         }
         if (OrderEntity.CANCELLED.equals(order.getStatus()) || OrderEntity.RETURNED.equals(order.getStatus())) {
             throw BusinessException.conflict(ErrorCode.INVALID_STATUS_TRANSITION,

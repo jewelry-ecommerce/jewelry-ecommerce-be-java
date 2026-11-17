@@ -4,6 +4,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(VnpayProperties.class)
-public class VnpayConfiguration {
+@EnableConfigurationProperties(MomoProperties.class)
+public class MomoConfiguration {
 }
