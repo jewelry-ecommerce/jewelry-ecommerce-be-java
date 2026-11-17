@@ -37,7 +37,9 @@ public class AiAssistantChatService implements AiAssistantService {
             return reply(gemini.reply(text, catalog), catalog);
         } catch (RuntimeException ex) {
             log.warn("AI_ASSISTANT_PROVIDER_FALLBACK reason={}", ex.getMessage());
-            return new AssistantMessageResponseDto(FALLBACK_REPLY, List.of());
+            AssistantMessageResponseDto fallback = new AssistantMessageResponseDto(FALLBACK_REPLY, List.of(), null);
+            fallback.setProviderStatus(ex.getMessage());
+            return fallback;
         }
     }
 
@@ -52,7 +54,7 @@ public class AiAssistantChatService implements AiAssistantService {
 
     private static AssistantMessageResponseDto reply(AssistantReplyParser.Draft draft, List<AiCandidate> catalog) {
         String text = draft.reply() == null || draft.reply().isBlank() ? FALLBACK_REPLY : draft.reply();
-        return new AssistantMessageResponseDto(text, cards(catalog, draft.productIds()));
+        return new AssistantMessageResponseDto(text, cards(catalog, draft.productIds()), null);
     }
 
     private static List<StylistRecommendationResponseDto> cards(List<AiCandidate> catalog, List<Long> ids) {

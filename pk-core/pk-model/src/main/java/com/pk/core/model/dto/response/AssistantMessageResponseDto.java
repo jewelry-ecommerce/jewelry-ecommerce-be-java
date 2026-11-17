@@ -1,5 +1,6 @@
 package com.pk.core.model.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -16,4 +17,8 @@ public class AssistantMessageResponseDto {
 
     private String reply;
     private List<StylistRecommendationResponseDto> recommendations;
+
+    /** Chỉ có khi model không trả lời được. Không hiện trên khung chat. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String providerStatus;
 }
