@@ -1,5 +1,6 @@
 package com.pk.core.test.business;
 
+import com.pk.core.business.ai.AssistantCompletionClient;
 import com.pk.core.business.ai.AssistantSystemPrompt;
 import com.pk.core.business.ai.AssistantTools;
 import com.pk.core.business.ai.AssistantTranscript;
@@ -22,6 +23,25 @@ class AssistantTranscriptTest {
         assertEquals("user", messages.get(1).get("role"));
         assertFalse(String.valueOf(messages.get(0).get("content")).contains("tôi muốn mua nhẫn"));
         assertTrue(String.valueOf(messages.get(0).get("content")).contains("search_products"));
+    }
+
+    @Test
+    void geminiChatOmitsFieldsTheProviderRejects() {
+        assertTrue(AssistantCompletionClient.geminiHost("https://generativelanguage.googleapis.com/v1beta/openai"));
+        assertFalse(AssistantCompletionClient.geminiHost("https://api.openai.com/v1"));
+        Map<String, Object> tool = AssistantTools.definitions(false).get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> function = (Map<String, Object>) tool.get("function");
+        assertFalse(function.containsKey("strict"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> parameters = (Map<String, Object>) function.get("parameters");
+        assertFalse(parameters.containsKey("additionalProperties"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> schema = (Map<String, Object>) AssistantTools.replySchema(false).get("json_schema");
+        assertFalse(schema.containsKey("strict"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inner = (Map<String, Object>) schema.get("schema");
+        assertFalse(inner.containsKey("additionalProperties"));
     }
 
     @Test
