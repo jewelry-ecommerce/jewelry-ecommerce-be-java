@@ -1,7 +1,8 @@
 package com.pk.core.test.business;
 
-import com.pk.core.business.ai.AssistantReplyParser;
-import com.pk.core.business.ai.GeminiAssistantClient;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pk.core.business.ai.AssistantCompletionClient;
 import com.pk.core.business.repository.CategoryRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
@@ -25,12 +26,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.List;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -48,14 +49,15 @@ class AiAssistantIT {
     @Autowired private ProductRepo products;
     @Autowired private ProductSkuRepo skus;
     @Autowired private PlatformTransactionManager transactionManager;
-    @MockBean private GeminiAssistantClient gemini;
+    @MockBean private AssistantCompletionClient client;
+    private final ObjectMapper json = new ObjectMapper();
 
     @BeforeEach
-    void answerWithoutCallingAnExternalProvider() {
-        when(gemini.reply(anyString(), anyList())).thenAnswer(invocation -> {
+    void answerWithoutCallingAnExternalProvider() throws Exception {
+        when(client.complete(anyList(), anyBoolean())).thenAnswer(invocation -> {
             assertFalse(TransactionSynchronizationManager.isActualTransactionActive(),
                     "Catalog transaction must close before calling the external AI provider");
-            return new AssistantReplyParser.Draft("Shop chào bạn, shop có thể tư vấn chọn nhẫn ạ.", List.of());
+            return assistantText("Shop chào bạn, shop có thể tư vấn chọn nhẫn ạ.");
         });
     }
 
@@ -76,7 +78,7 @@ class AiAssistantIT {
 
     @Test
     void providerUnavailableReturnsTheExistingFallbackInsteadOfAnInternalError() throws Exception {
-        when(gemini.reply(anyString(), anyList()))
+        when(client.complete(anyList(), anyBoolean()))
                 .thenThrow(new BusinessException(503, ErrorCode.AI_PROVIDER_UNAVAILABLE, "AI đang bận"));
         mvc.perform(post(ENDPOINT).contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"chào\"}"))
                 .andExpect(status().isOk())
@@ -87,15 +89,26 @@ class AiAssistantIT {
     @Test
     void productAdviceIncludesOnlyTheRealCatalogCard() throws Exception {
         Long productId = seedProduct();
-        when(gemini.reply(anyString(), anyList())).thenAnswer(invocation -> {
+        when(client.complete(anyList(), eq(true))).thenReturn(searchCall());
+        when(client.complete(anyList(), eq(false))).thenAnswer(invocation -> {
             assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
-            return new AssistantReplyParser.Draft("Bạn có thể tham khảo nhẫn bạc này ạ.", List.of(productId));
+            return assistantText("{\"reply\":\"Bạn có thể tham khảo nhẫn bạc này ạ.\",\"productIds\":[" + productId + "]}");
         });
         mvc.perform(post(ENDPOINT).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"tôi cần tư vấn mua nhẫn\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recommendations[0].id").value(productId.intValue()))
                 .andExpect(jsonPath("$.data.recommendations[0].price").value(500000));
+    }
+
+    private JsonNode assistantText(String content) throws Exception {
+        return json.readTree("{\"role\":\"assistant\",\"content\":" + json.writeValueAsString(content) + "}");
+    }
+
+    private JsonNode searchCall() throws Exception {
+        String arguments = json.writeValueAsString("{\"query\":\"nhẫn\"}");
+        return json.readTree("{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\","
+                + "\"type\":\"function\",\"function\":{\"name\":\"search_products\",\"arguments\":" + arguments + "}}]}");
     }
 
     private Long seedProduct() {

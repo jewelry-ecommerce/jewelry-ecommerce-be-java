@@ -56,6 +56,16 @@ public class AiRecommendationOrchestrator {
         return cap(enrich(found), Math.max(1, properties.getMaxCandidates()));
     }
 
+    /** Món khớp link hoặc từ khóa. Transaction đóng trước khi gọi Gemini. */
+    @Transactional(readOnly = true)
+    public List<AiCandidate> forAssistant(String slug, String keyword) {
+        int limit = Math.max(1, properties.getAssistantRetrievalLimit());
+        List<AiCandidate> picked = new ArrayList<>();
+        addSlug(picked, slug);
+        addMatches(picked, keyword, limit);
+        return picked.size() <= limit ? picked : new ArrayList<>(picked.subList(0, limit));
+    }
+
     public AiAssembledResult recommend(StylistRequestDto request, Long userId) {
         List<AiCandidate> pool = loadCandidates(request, userId);
         if (pool.isEmpty()) {
@@ -94,6 +104,79 @@ public class AiRecommendationOrchestrator {
         }
         int max = Math.max(1, properties.getMaxCandidates());
         return cap(excludeDisliked(priced, userId), max);
+    }
+
+    private void addSlug(List<AiCandidate> picked, String slug) {
+        if (slug == null || slug.isBlank()) {
+            return;
+        }
+        ProductEntity product = products.findBySlug(slug.trim());
+        if (product != null && product.isSellable()) {
+            appendMatches(picked, List.of(product), picked.size() + 1);
+        }
+    }
+
+    private void addMatches(List<AiCandidate> picked, String keyword, int limit) {
+        String phrase = safeKeyword(keyword);
+        if (phrase.isEmpty() || picked.size() >= limit) {
+            return;
+        }
+        List<ProductEntity> found = searchByName(phrase);
+        if ((found == null || found.isEmpty()) && phrase.contains(" ")) {
+            found = searchByName(longestToken(phrase));
+        }
+        appendMatches(picked, found, limit);
+    }
+
+    private List<ProductEntity> searchByName(String keyword) {
+        if (keyword.isEmpty()) {
+            return List.of();
+        }
+        return products.searchPublished("", "", keyword, "", BigDecimal.ZERO, OPEN_MAX);
+    }
+
+    private void appendMatches(List<AiCandidate> picked, List<ProductEntity> found, int limit) {
+        if (found == null) {
+            return;
+        }
+        for (ProductEntity product : found) {
+            if (picked.size() >= limit || containsProduct(picked, product.getId())) {
+                continue;
+            }
+            AiCandidate candidate = candidateOrSkip(product);
+            if (candidate != null) {
+                picked.add(candidate);
+            }
+        }
+    }
+
+    private static boolean containsProduct(List<AiCandidate> picked, Long productId) {
+        if (productId == null) {
+            return true;
+        }
+        for (AiCandidate candidate : picked) {
+            if (candidate.productId() == productId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String safeKeyword(String keyword) {
+        if (keyword == null) {
+            return "";
+        }
+        return keyword.replace("%", "").replace("_", "").trim();
+    }
+
+    private static String longestToken(String phrase) {
+        String longest = "";
+        for (String token : phrase.split(" ")) {
+            if (token.length() > longest.length()) {
+                longest = token;
+            }
+        }
+        return longest;
     }
 
     private List<AiCandidate> enrich(List<ProductEntity> found) {

@@ -22,25 +22,34 @@ server:
 
 app:
   payment:
-    vnpay:
-      enabled: ${VNPAY_ENABLED:true}
-      demo-mode: ${VNPAY_DEMO_MODE:true}
-      tmn-code: ${VNPAY_TMN_CODE:DEMO}
-      hash-secret: ${VNPAY_HASH_SECRET:jewelry-vnpay-demo-only}
-      pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-      return-url: ${VNPAY_RETURN_URL:http://localhost:3100/thanh-toan-vnpay}
-      ipn-url: ${VNPAY_IPN_URL:http://localhost:8080/api/v1/storefront/payment/vnpay/ipn}
-      client-base-url: ${VNPAY_CLIENT_BASE_URL:http://localhost:3100}
-      timeout: ${VNPAY_TIMEOUT:15m}
+    momo:
+      enabled: ${MOMO_ENABLED:true}
+      partner-code: ${MOMO_PARTNER_CODE:MOMO}
+      access-key: ${MOMO_ACCESS_KEY:F8BBA842ECF85}
+      secret-key: ${MOMO_SECRET_KEY:K951B6PE1waDMi640xX08PD3vg6EkVlz}
+      endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
+      redirect-url: ${MOMO_REDIRECT_URL:http://localhost:8080/api/v1/storefront/payment/momo/return}
+      ipn-url: ${MOMO_IPN_URL:http://localhost:8080/api/v1/storefront/payment/momo/ipn}
+      client-base-url: ${MOMO_CLIENT_BASE_URL:http://localhost:3100}
   ai:
     enabled: ${AI_ENABLED:false}
     provider: ${AI_PROVIDER:gemini}
     api-key: ${AI_API_KEY:}
     base-url: ${AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
-    model: ${AI_MODEL:gemini-2.0-flash}
-    assistant-model: ${AI_ASSISTANT_MODEL:gemini-2.5-flash-lite}
+    model: ${AI_MODEL:gemini-3.5-flash-lite}
+    assistant-model: ${AI_ASSISTANT_MODEL:gemini-3.1-pro-preview}
+    current-model: ${AI_CURRENT_MODEL:gemini-3.1-pro-preview}
+    assistant-thinking-level: ${AI_ASSISTANT_THINKING_LEVEL:HIGH}
     timeout: ${AI_TIMEOUT:3s}
-    assistant-timeout: ${AI_ASSISTANT_TIMEOUT:8s}
+    assistant-timeout: ${AI_ASSISTANT_TIMEOUT:60s}
+    assistant-max-output-tokens: ${AI_ASSISTANT_MAX_OUTPUT_TOKENS:8192}
+    assistant-retrieval-limit: ${AI_ASSISTANT_RETRIEVAL_LIMIT:8}
+    chat-base-url: ${AI_CHAT_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
+    temperature: ${AI_TEMPERATURE:0.2}
+    prompt-cache-key: ${AI_PROMPT_CACHE_KEY:jewelry-shop-assistant}
+    prompt-cache-retention: ${AI_PROMPT_CACHE_RETENTION:in_memory}
+    assistant-max-tool-rounds: ${AI_ASSISTANT_MAX_TOOL_ROUNDS:1}
+    shop-brief: ${AI_SHOP_BRIEF:Shop bán trang sức. Khách xem sản phẩm, thêm vào giỏ rồi đặt hàng. Thanh toán COD hoặc MoMo. Phí giao hàng hiện là 0 đồng. Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.}
     max-candidates: ${AI_MAX_CANDIDATES:24}
     min-recommendations: ${AI_MIN_RECOMMENDATIONS:3}
     max-recommendations: ${AI_MAX_RECOMMENDATIONS:6}

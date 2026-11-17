@@ -2,53 +2,42 @@ package com.pk.core.business.service.impl;
 
 import com.pk.core.business.ai.AiCandidate;
 import com.pk.core.business.ai.AiRankingResult;
-import com.pk.core.business.ai.AiRecommendationOrchestrator;
 import com.pk.core.business.ai.AssistantReplyParser;
-import com.pk.core.business.ai.GeminiAssistantClient;
+import com.pk.core.business.ai.AssistantTurn;
+import com.pk.core.business.ai.ShopAssistantService;
 import com.pk.core.business.service.AiAssistantService;
 import com.pk.core.model.dto.response.AssistantMessageResponseDto;
 import com.pk.core.model.dto.response.StylistRecommendationResponseDto;
-import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Trợ lý trang sức: Gemini trả lời câu tự do, món đính kèm chỉ lấy từ catalog. */
+/** Cửa chat. Việc gọi model và tool nằm ở ShopAssistantService. */
 @Service
 @Slf4j
 public class AiAssistantChatService implements AiAssistantService {
 
     static final String FALLBACK_REPLY = "Xin chào, shop có thể hỗ trợ bạn chọn trang sức ạ. Bạn cần tư vấn món nào?";
 
-    private final AiRecommendationOrchestrator orchestrator;
-    private final GeminiAssistantClient gemini;
+    private final ShopAssistantService shop;
 
-    public AiAssistantChatService(AiRecommendationOrchestrator orchestrator, GeminiAssistantClient gemini) {
-        this.orchestrator = orchestrator;
-        this.gemini = gemini;
+    public AiAssistantChatService(ShopAssistantService shop) {
+        this.shop = shop;
     }
 
     @Override
     public AssistantMessageResponseDto chat(String message) {
         String text = message == null ? "" : message.trim();
-        List<AiCandidate> catalog = loadCatalog();
         try {
-            return reply(gemini.reply(text, catalog), catalog);
-        } catch (RuntimeException ex) {
+            AssistantTurn turn = shop.answer(text);
+            return reply(turn.draft(), turn.products());
+        } catch (Exception ex) {
             log.warn("AI_ASSISTANT_PROVIDER_FALLBACK reason={}", ex.getMessage());
             AssistantMessageResponseDto fallback = new AssistantMessageResponseDto(FALLBACK_REPLY, List.of(), null);
             fallback.setProviderStatus(ex.getMessage());
             return fallback;
-        }
-    }
-
-    private List<AiCandidate> loadCatalog() {
-        try {
-            return orchestrator.openCatalog();
-        } catch (RuntimeException ex) {
-            log.warn("AI_ASSISTANT_CATALOG_SKIPPED reason={}", ex.getMessage());
-            return List.of();
         }
     }
 
