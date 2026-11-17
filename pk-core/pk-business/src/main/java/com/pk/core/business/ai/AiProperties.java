@@ -26,11 +26,17 @@ public class AiProperties {
 
     private String baseUrl = "https://generativelanguage.googleapis.com/v1beta";
 
-    /** Model miễn phí phù hợp đồ án; có thể đổi bằng env. */
+    /** Model xếp hạng stylist. Chat dùng assistantModel. */
     private String model = "gemini-2.0-flash";
 
-    /** Timeout cuộc gọi provider (spec EP-05 ~3s). */
+    /** Model chat, cùng dòng model đồ án tham chiếu đang trả lời được. */
+    private String assistantModel = "gemini-2.5-flash-lite";
+
+    /** Timeout cuộc gọi xếp hạng (spec EP-05 ~3s). */
     private Duration timeout = Duration.ofSeconds(3);
+
+    /** Chat cần dài hơn 3 giây để câu chào không bị cắt. */
+    private Duration assistantTimeout = Duration.ofSeconds(8);
 
     private int maxCandidates = 24;
 

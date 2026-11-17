@@ -24,6 +24,13 @@ class AssistantReplyParserTest {
     }
 
     @Test
+    void keepsAPlainGreetingWhenTheModelDoesNotReturnJson() throws Exception {
+        AssistantReplyParser.Draft draft = parser.parse("Shop chào bạn, bạn cần tư vấn món nào ạ?", Set.of(10L));
+        assertEquals("Shop chào bạn, bạn cần tư vấn món nào ạ?", draft.reply());
+        assertTrue(draft.productIds().isEmpty());
+    }
+
+    @Test
     void returnsAnEmptyProductListWhenTheQuestionNeedsNoItem() throws Exception {
         AssistantReplyParser.Draft draft = parser.parse("{\"reply\":\"Bạc 925 tránh nước biển.\",\"productIds\":[]}", Set.of(10L));
         assertTrue(draft.productIds().isEmpty());

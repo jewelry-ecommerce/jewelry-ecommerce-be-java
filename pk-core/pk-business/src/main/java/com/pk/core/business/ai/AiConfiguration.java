@@ -7,6 +7,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.concurrent.Semaphore;
 
 @Configuration
@@ -15,15 +16,19 @@ public class AiConfiguration {
 
     @Bean("aiRestClient")
     RestClient aiRestClient(AiProperties properties) {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(properties.getTimeout())
-                .build();
+        return client(properties.getBaseUrl(), properties.getTimeout());
+    }
+
+    @Bean("assistantRestClient")
+    RestClient assistantRestClient(AiProperties properties) {
+        return client(properties.getBaseUrl(), properties.getAssistantTimeout());
+    }
+
+    private static RestClient client(String baseUrl, Duration timeout) {
+        HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
-        factory.setReadTimeout(properties.getTimeout());
-        return RestClient.builder()
-                .baseUrl(properties.getBaseUrl())
-                .requestFactory(factory)
-                .build();
+        factory.setReadTimeout(timeout);
+        return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
     }
 
     @Bean("aiProviderSemaphore")
