@@ -47,6 +47,8 @@ public class AssistantCompletionClient {
             return message(post(body(messages, allowTools)));
         } catch (BusinessException ex) {
             throw ex;
+        } catch (RestClientResponseException ex) {
+            throw httpFailure(ex);
         } catch (RestClientException ex) {
             throw unavailable("Không gọi được AI");
         } catch (Exception ex) {
@@ -60,14 +62,29 @@ public class AssistantCompletionClient {
         try {
             return send(body);
         } catch (RestClientResponseException ex) {
-            if (ex.getStatusCode().value() != 400 || !body.containsKey("prompt_cache_key")) {
-                throw unavailable("Không gọi được AI " + ex.getStatusCode().value());
+            Map<String, Object> retry = relax(body);
+            if (ex.getStatusCode().value() != 400 || retry.equals(body)) {
+                throw httpFailure(ex);
             }
-            Map<String, Object> retry = new LinkedHashMap<>(body);
-            retry.remove("prompt_cache_key");
-            retry.remove("prompt_cache_retention");
-            return send(retry);
+            return resend(retry);
         }
+    }
+
+    private String resend(Map<String, Object> body) {
+        try {
+            return send(body);
+        } catch (RestClientResponseException ex) {
+            throw httpFailure(ex);
+        }
+    }
+
+    private static Map<String, Object> relax(Map<String, Object> body) {
+        Map<String, Object> retry = new LinkedHashMap<>(body);
+        retry.remove("prompt_cache_key");
+        retry.remove("prompt_cache_retention");
+        retry.remove("parallel_tool_calls");
+        retry.remove("response_format");
+        return retry;
     }
 
     private String send(Map<String, Object> body) {
@@ -81,20 +98,29 @@ public class AssistantCompletionClient {
     }
 
     private Map<String, Object> body(List<Map<String, Object>> messages, boolean allowTools) {
+        boolean gemini = geminiHost(properties.getChatBaseUrl());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("model", properties.chatModel());
         payload.put("temperature", properties.getTemperature());
         payload.put("messages", messages);
         payload.put("max_tokens", properties.getAssistantMaxOutputTokens());
         if (allowTools) {
-            payload.put("tools", AssistantTools.definitions());
+            payload.put("tools", AssistantTools.definitions(!gemini));
             payload.put("tool_choice", "auto");
-            payload.put("parallel_tool_calls", false);
+            if (!gemini) {
+                payload.put("parallel_tool_calls", false);
+            }
         } else {
-            payload.put("response_format", AssistantTools.replySchema());
+            payload.put("response_format", AssistantTools.replySchema(!gemini));
         }
-        putCache(payload);
+        if (!gemini) {
+            putCache(payload);
+        }
         return payload;
+    }
+
+    public static boolean geminiHost(String chatBaseUrl) {
+        return chatBaseUrl != null && chatBaseUrl.contains("generativelanguage.googleapis.com");
     }
 
     private void putCache(Map<String, Object> payload) {
@@ -120,6 +146,22 @@ public class AssistantCompletionClient {
             base = base.substring(0, base.length() - 1);
         }
         return URI.create(base + "/chat/completions");
+    }
+
+    private static BusinessException httpFailure(RestClientResponseException ex) {
+        String detail = brief(ex.getResponseBodyAsString());
+        String message = detail.isBlank()
+                ? "Không gọi được AI " + ex.getStatusCode().value()
+                : "Không gọi được AI " + ex.getStatusCode().value() + ": " + detail;
+        return unavailable(message);
+    }
+
+    private static String brief(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        String oneLine = body.replaceAll("\\s+", " ").trim();
+        return oneLine.length() <= 160 ? oneLine : oneLine.substring(0, 160);
     }
 
     private static BusinessException unavailable(String message) {

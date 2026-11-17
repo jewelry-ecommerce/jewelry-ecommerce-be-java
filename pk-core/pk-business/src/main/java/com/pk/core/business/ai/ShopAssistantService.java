@@ -76,14 +76,33 @@ public class ShopAssistantService {
         return copy;
     }
 
-    private AssistantTurn turn(JsonNode assistant, List<AiCandidate> found) throws Exception {
+    private AssistantTurn turn(JsonNode assistant, List<AiCandidate> found) {
         String content = textContent(assistant);
         Set<Long> allowed = found.stream().map(AiCandidate::productId).collect(Collectors.toSet());
-        try {
-            return new AssistantTurn(parser.parse(content, allowed), found);
-        } catch (Exception ex) {
-            return new AssistantTurn(new AssistantReplyParser.Draft(content, List.of()), found);
+        AssistantReplyParser.Draft draft = read(content, allowed);
+        if (!draft.productIds().isEmpty() || found.isEmpty()) {
+            return new AssistantTurn(draft, found);
         }
+        return new AssistantTurn(new AssistantReplyParser.Draft(draft.reply(), foundIds(found)), found);
+    }
+
+    private AssistantReplyParser.Draft read(String content, Set<Long> allowed) {
+        try {
+            return parser.parse(content, allowed);
+        } catch (Exception ex) {
+            return new AssistantReplyParser.Draft(content, List.of());
+        }
+    }
+
+    private static List<Long> foundIds(List<AiCandidate> found) {
+        List<Long> ids = new ArrayList<>();
+        for (AiCandidate candidate : found) {
+            if (ids.size() >= AssistantReplyParser.MAX_PRODUCTS) {
+                break;
+            }
+            ids.add(candidate.productId());
+        }
+        return ids;
     }
 
     private static boolean hasTools(JsonNode message) {
