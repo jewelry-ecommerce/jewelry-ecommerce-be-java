@@ -12,6 +12,7 @@ import com.pk.core.model.entity.ProductEntity;
 import com.pk.core.model.entity.ProductSkuEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ public class AiRecommendationOrchestrator {
         this.rules = rules;
     }
 
+    @Transactional(readOnly = true)
     public List<AiCandidate> openCatalog() {
         List<ProductEntity> found = products.searchPublished("", "", "", "", BigDecimal.ZERO, OPEN_MAX);
         return cap(enrich(found), Math.max(1, properties.getMaxCandidates()));
@@ -100,12 +102,32 @@ public class AiRecommendationOrchestrator {
             return out;
         }
         for (ProductEntity product : found) {
-            AiCandidate candidate = toCandidate(product);
+            AiCandidate candidate = candidateOrSkip(product);
             if (candidate != null) {
                 out.add(candidate);
             }
         }
         return out;
+    }
+
+    private AiCandidate candidateOrSkip(ProductEntity product) {
+        try {
+            return toCandidate(product);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private String categoryName(ProductEntity product) {
+        if (product.getCategoryId() == null) {
+            return "Khác";
+        }
+        try {
+            CategoryEntity category = categories.findOne(product.getCategoryId());
+            return category == null || category.getName() == null ? "Khác" : category.getName();
+        } catch (RuntimeException ex) {
+            return "Khác";
+        }
     }
 
     private AiCandidate toCandidate(ProductEntity product) {
@@ -116,8 +138,7 @@ public class AiRecommendationOrchestrator {
         if (sku == null || sku.effectivePrice() == null) {
             return null;
         }
-        CategoryEntity category = product.getCategoryId() == null ? null : categories.findOne(product.getCategoryId());
-        String categoryName = category == null || category.getName() == null ? "Khác" : category.getName();
+        String categoryName = categoryName(product);
         return new AiCandidate(product.getId(), product.getCategoryId(), categoryName, product.getName(),
                 product.getSlug(), product.getThumbnailUrl(), product.getOccasion(), product.getMaterial(),
                 sku.getId(), sku.getSkuCode(), sku.effectivePrice(), sku.available());

@@ -38,7 +38,9 @@ app:
     api-key: ${AI_API_KEY:}
     base-url: ${AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     model: ${AI_MODEL:gemini-2.0-flash}
+    assistant-model: ${AI_ASSISTANT_MODEL:gemini-2.5-flash-lite}
     timeout: ${AI_TIMEOUT:3s}
+    assistant-timeout: ${AI_ASSISTANT_TIMEOUT:8s}
     max-candidates: ${AI_MAX_CANDIDATES:24}
     min-recommendations: ${AI_MIN_RECOMMENDATIONS:3}
     max-recommendations: ${AI_MAX_RECOMMENDATIONS:6}

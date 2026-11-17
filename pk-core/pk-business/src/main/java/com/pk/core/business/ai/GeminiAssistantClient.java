@@ -28,7 +28,7 @@ public class GeminiAssistantClient {
     private final ObjectMapper mapper;
 
     public GeminiAssistantClient(AiProperties properties,
-                                 @Qualifier("aiRestClient") RestClient client,
+                                 @Qualifier("assistantRestClient") RestClient client,
                                  @Qualifier("aiProviderSemaphore") Semaphore semaphore,
                                  ObjectMapper mapper) {
         this.properties = properties;
@@ -57,7 +57,7 @@ public class GeminiAssistantClient {
             String raw = client.post()
                     .uri(builder -> builder.path("/models/{model}:generateContent")
                             .queryParam("key", properties.getApiKey())
-                            .build(properties.getModel()))
+                            .build(model()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body(message, catalog))
                     .retrieve()
@@ -90,7 +90,8 @@ public class GeminiAssistantClient {
         text.append("Bạn là nhân viên shop trang sức. Xưng shop, gọi khách là bạn, lịch sự, có chữ ạ. ");
         text.append("Shop chào trước. Không bảo khách chào shop. ");
         text.append("Trả lời tiếng Việt, ngắn. Không dùng các từ trợ lý, stylist, chat, AI. ");
-        text.append("Khách có thể chào hoặc hỏi về dịp, chất liệu, cách giữ gìn, kích cỡ và quà tặng. ");
+        text.append("Khách chỉ chào thì chào lại và hỏi món họ cần, productIds để trống. ");
+        text.append("Khách có thể hỏi về dịp, chất liệu, cách giữ gìn, kích cỡ và quà tặng. ");
         text.append("Chỉ trả JSON {\"reply\":string,\"productIds\":[number]}. ");
         text.append("productIds chỉ lấy id trong danh sách, tối đa 4, để trống nếu câu không cần gợi ý món. ");
         text.append("Không bịa sản phẩm ngoài danh sách.\nKhách: ").append(message);
@@ -102,6 +103,11 @@ public class GeminiAssistantClient {
         }
         int max = Math.max(500, properties.getMaxInputChars());
         return text.length() <= max ? text.toString() : text.substring(0, max);
+    }
+
+    private String model() {
+        String configured = properties.getAssistantModel();
+        return configured == null || configured.isBlank() ? properties.getModel() : configured;
     }
 
     private static String firstText(JsonNode root) {

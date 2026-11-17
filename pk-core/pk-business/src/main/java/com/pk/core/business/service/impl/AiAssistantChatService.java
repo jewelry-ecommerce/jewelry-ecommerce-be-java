@@ -9,12 +9,14 @@ import com.pk.core.business.service.AiAssistantService;
 import com.pk.core.model.dto.response.AssistantMessageResponseDto;
 import com.pk.core.model.dto.response.StylistRecommendationResponseDto;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /** Trợ lý trang sức: Gemini trả lời câu tự do, món đính kèm chỉ lấy từ catalog. */
 @Service
+@Slf4j
 public class AiAssistantChatService implements AiAssistantService {
 
     static final String FALLBACK_REPLY = "Xin chào, shop có thể hỗ trợ bạn chọn trang sức ạ. Bạn cần tư vấn món nào?";
@@ -30,14 +32,27 @@ public class AiAssistantChatService implements AiAssistantService {
     @Override
     public AssistantMessageResponseDto chat(String message) {
         String text = message == null ? "" : message.trim();
-        List<AiCandidate> catalog = orchestrator.openCatalog();
+        List<AiCandidate> catalog = loadCatalog();
         try {
-            AssistantReplyParser.Draft draft = gemini.reply(text, catalog);
-            String reply = draft.reply() == null || draft.reply().isBlank() ? FALLBACK_REPLY : draft.reply();
-            return new AssistantMessageResponseDto(reply, cards(catalog, draft.productIds()));
+            return reply(gemini.reply(text, catalog), catalog);
         } catch (RuntimeException ex) {
+            log.warn("AI_ASSISTANT_PROVIDER_FALLBACK reason={}", ex.getMessage());
             return new AssistantMessageResponseDto(FALLBACK_REPLY, List.of());
         }
+    }
+
+    private List<AiCandidate> loadCatalog() {
+        try {
+            return orchestrator.openCatalog();
+        } catch (RuntimeException ex) {
+            log.warn("AI_ASSISTANT_CATALOG_SKIPPED reason={}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private static AssistantMessageResponseDto reply(AssistantReplyParser.Draft draft, List<AiCandidate> catalog) {
+        String text = draft.reply() == null || draft.reply().isBlank() ? FALLBACK_REPLY : draft.reply();
+        return new AssistantMessageResponseDto(text, cards(catalog, draft.productIds()));
     }
 
     private static List<StylistRecommendationResponseDto> cards(List<AiCandidate> catalog, List<Long> ids) {

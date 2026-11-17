@@ -20,9 +20,12 @@ public final class AssistantReplyParser {
     }
 
     public Draft parse(String json, Set<Long> allowed) throws Exception {
-        JsonNode root = mapper.readTree(unwrap(json));
-        String reply = clip(root.path("reply").asText(""));
-        return new Draft(reply, productIds(root.path("productIds"), allowed));
+        String text = unwrap(json);
+        if (!text.startsWith("{")) {
+            return new Draft(clip(text), List.of());
+        }
+        JsonNode root = mapper.readTree(text);
+        return new Draft(clip(root.path("reply").asText("")), productIds(root.path("productIds"), allowed));
     }
 
     private static List<Long> productIds(JsonNode node, Set<Long> allowed) {
