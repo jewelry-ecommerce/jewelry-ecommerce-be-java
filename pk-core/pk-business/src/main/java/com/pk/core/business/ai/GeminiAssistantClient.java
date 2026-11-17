@@ -62,13 +62,27 @@ public class GeminiAssistantClient {
                     .body(body(message, catalog))
                     .retrieve()
                     .body(String.class);
-            return parser.parse(firstText(mapper.readTree(raw)), allowed(catalog));
+            return readReply(raw, catalog);
         } catch (BusinessException ex) {
             throw ex;
+        } catch (org.springframework.web.client.RestClientResponseException ex) {
+            throw unavailable("Không gọi được AI " + ex.getStatusCode().value());
         } catch (RestClientException ex) {
             throw unavailable("Không gọi được AI");
         } catch (Exception ex) {
             throw unavailable("AI trả về không đúng định dạng");
+        }
+    }
+
+    private AssistantReplyParser.Draft readReply(String raw, List<AiCandidate> catalog) throws Exception {
+        String text = firstText(mapper.readTree(raw));
+        if (text.isBlank()) {
+            throw unavailable("AI không có nội dung trả lời");
+        }
+        try {
+            return parser.parse(text, allowed(catalog));
+        } catch (Exception ex) {
+            return new AssistantReplyParser.Draft(text, List.of());
         }
     }
 
@@ -78,7 +92,6 @@ public class GeminiAssistantClient {
         content.put("parts", List.of(Map.of("text", prompt(message, catalog))));
         Map<String, Object> generation = new LinkedHashMap<>();
         generation.put("maxOutputTokens", properties.getMaxOutputTokens());
-        generation.put("responseMimeType", "application/json");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("contents", List.of(content));
         payload.put("generationConfig", generation);
@@ -112,10 +125,16 @@ public class GeminiAssistantClient {
 
     private static String firstText(JsonNode root) {
         JsonNode parts = root == null ? null : root.path("candidates").path(0).path("content").path("parts");
-        if (parts == null || !parts.isArray() || parts.isEmpty()) {
+        if (parts == null || !parts.isArray()) {
             return "";
         }
-        return parts.get(0).path("text").asText("");
+        StringBuilder text = new StringBuilder();
+        for (JsonNode part : parts) {
+            if (!part.path("thought").asBoolean(false)) {
+                text.append(part.path("text").asText(""));
+            }
+        }
+        return text.toString();
     }
 
     private static Set<Long> allowed(List<AiCandidate> catalog) {
