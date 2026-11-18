@@ -31,9 +31,10 @@ public class ShopAssistantService {
         this.mapper = mapper;
     }
 
-    public AssistantTurn answer(String message) throws Exception {
+    public AssistantTurn answer(String message, List<AssistantPrior> history) throws Exception {
+        List<AssistantPrior> prior = AssistantContext.latest(history, properties.getAssistantContextTurns());
         List<Map<String, Object>> messages = AssistantTranscript.start(
-                AssistantSystemPrompt.text(properties.getShopBrief()), message);
+                AssistantSystemPrompt.text(properties.getShopBrief()), prior, message);
         List<AiCandidate> found = new ArrayList<>();
         JsonNode assistant = ask(messages, found);
         return turn(assistant, found);

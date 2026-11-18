@@ -49,6 +49,7 @@ app:
     prompt-cache-key: ${AI_PROMPT_CACHE_KEY:jewelry-shop-assistant}
     prompt-cache-retention: ${AI_PROMPT_CACHE_RETENTION:in_memory}
     assistant-max-tool-rounds: ${AI_ASSISTANT_MAX_TOOL_ROUNDS:1}
+    assistant-context-turns: ${AI_ASSISTANT_CONTEXT_TURNS:10}
     shop-brief: ${AI_SHOP_BRIEF:Shop bán trang sức. Khách xem sản phẩm, thêm vào giỏ rồi đặt hàng. Thanh toán COD hoặc MoMo. Phí giao hàng hiện là 0 đồng. Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.}
     max-candidates: ${AI_MAX_CANDIDATES:24}
     min-recommendations: ${AI_MIN_RECOMMENDATIONS:3}

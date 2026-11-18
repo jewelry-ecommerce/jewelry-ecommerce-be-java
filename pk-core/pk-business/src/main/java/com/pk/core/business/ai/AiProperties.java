@@ -85,6 +85,9 @@ public class AiProperties {
     /** Vòng gọi tool trước câu trả lời cuối. */
     private int assistantMaxToolRounds = 1;
 
+    /** Số lượt gần nhất đưa vào request. Một lượt là một câu khách và một câu shop. */
+    private int assistantContextTurns = 10;
+
     /** Tờ thông tin shop, nằm trong bộ nhớ. Câu phí ship và thanh toán không query sản phẩm. */
     private String shopBrief = "Shop bán trang sức. Khách xem sản phẩm, thêm vào giỏ rồi đặt hàng. "
             + "Thanh toán COD hoặc MoMo. Phí giao hàng hiện là 0 đồng. "
