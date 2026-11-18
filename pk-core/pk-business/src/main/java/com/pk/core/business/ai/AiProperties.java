@@ -90,7 +90,7 @@ public class AiProperties {
 
     /** Tờ thông tin shop, nằm trong bộ nhớ. Câu phí ship và thanh toán không query sản phẩm. */
     private String shopBrief = "Shop bán trang sức. Khách xem sản phẩm, thêm vào giỏ rồi đặt hàng. "
-            + "Thanh toán COD hoặc MoMo. Phí giao hàng hiện là 0 đồng. "
+            + "Thanh toán COD hoặc PayOS. Phí giao hàng hiện là 0 đồng. "
             + "Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.";
 
     public boolean providerReady() {

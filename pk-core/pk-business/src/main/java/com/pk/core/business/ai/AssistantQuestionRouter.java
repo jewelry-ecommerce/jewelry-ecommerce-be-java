@@ -26,7 +26,7 @@ public final class AssistantQuestionRouter {
             "chào", "hello", "hi", "hey", "alo", "chao");
 
     private static final Set<String> POLICY = Set.of(
-            "phí", "phi", "ship", "giao", "thanh", "toán", "toan", "momo", "cod", "đổi", "doi",
+            "phí", "phi", "ship", "giao", "thanh", "toán", "toan", "payos", "cod", "đổi", "doi",
             "trả", "tra", "bảo", "hành", "hanh", "liên", "hệ", "he", "đơn", "don", "đặt", "dat");
 
     private static final Set<String> GENERIC = Set.of(

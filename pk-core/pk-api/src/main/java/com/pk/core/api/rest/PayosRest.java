@@ -1,13 +1,14 @@
 package com.pk.core.api.rest;
 
-import com.pk.core.business.payment.MomoCheckoutService;
-import com.pk.core.business.payment.MomoProperties;
-import com.pk.core.business.payment.MomoReceiptService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.pk.core.business.payment.PayosCheckoutService;
+import com.pk.core.business.payment.PayosProperties;
+import com.pk.core.business.payment.PayosReceiptService;
 import com.pk.core.business.web.AbstractRest;
 import com.pk.core.common.web.BaseRes;
 import com.pk.core.identity.security.model.SecurityUser;
 import com.pk.core.model.constant.UrlConstant;
-import com.pk.core.model.dto.request.MomoStartRequestDto;
+import com.pk.core.model.dto.request.PayosStartRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -27,13 +28,13 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(UrlConstant.Common.API + UrlConstant.Common.VERSION + UrlConstant.Payment.BASE)
-public class MomoRest extends AbstractRest {
-    private final MomoCheckoutService checkout;
-    private final MomoReceiptService receipts;
-    private final MomoProperties properties;
+public class PayosRest extends AbstractRest {
+    private final PayosCheckoutService checkout;
+    private final PayosReceiptService receipts;
+    private final PayosProperties properties;
 
-    @PostMapping("/momo/start")
-    public BaseRes start(@AuthenticationPrincipal SecurityUser user, @Valid @RequestBody MomoStartRequestDto body,
+    @PostMapping("/payos/start")
+    public BaseRes start(@AuthenticationPrincipal SecurityUser user, @Valid @RequestBody PayosStartRequestDto body,
                          HttpServletRequest request, HttpServletResponse response) {
         try {
             Long userId = user == null ? null : user.getId();
@@ -43,34 +44,40 @@ public class MomoRest extends AbstractRest {
         }
     }
 
-    @GetMapping("/momo/return")
+    @GetMapping("/payos/return")
     public Object returned(HttpServletRequest request, HttpServletResponse response) {
         try {
-            String path = receipts.handleReturn(query(request));
-            String target = browserTarget(request, path);
-            if (target == null) return restSuccessHandle.handleSuccess(path);
-            response.sendRedirect(target);
-            return null;
+            return browserOrJson(request, response, receipts.handleReturn(query(request)));
         } catch (Exception failure) {
             return restErrorHandle.handleException(failure, request, response);
         }
     }
 
-    @PostMapping("/momo/ipn")
-    public ResponseEntity<Void> ipn(@RequestBody Map<String, Object> body) {
-        receipts.handleIpn(strings(body));
+    @GetMapping("/payos/cancel")
+    public Object cancelled(HttpServletRequest request, HttpServletResponse response) {
+        try {
+            return browserOrJson(request, response, receipts.handleCancel(query(request)));
+        } catch (Exception failure) {
+            return restErrorHandle.handleException(failure, request, response);
+        }
+    }
+
+    @PostMapping("/payos/webhook")
+    public ResponseEntity<Void> webhook(@RequestBody JsonNode body) {
+        receipts.handleWebhook(body);
         return ResponseEntity.noContent().build();
+    }
+
+    private Object browserOrJson(HttpServletRequest request, HttpServletResponse response, String path) throws Exception {
+        String target = browserTarget(request, path);
+        if (target == null) return restSuccessHandle.handleSuccess(path);
+        response.sendRedirect(target);
+        return null;
     }
 
     private static Map<String, String> query(HttpServletRequest request) {
         Map<String, String> params = new LinkedHashMap<>();
         request.getParameterMap().forEach((key, value) -> params.put(key, value.length == 0 ? "" : value[0]));
-        return params;
-    }
-
-    private static Map<String, String> strings(Map<String, Object> body) {
-        Map<String, String> params = new LinkedHashMap<>();
-        body.forEach((key, value) -> params.put(key, value == null ? "" : String.valueOf(value)));
         return params;
     }
 

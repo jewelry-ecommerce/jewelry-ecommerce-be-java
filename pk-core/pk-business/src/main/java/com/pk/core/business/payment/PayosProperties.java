@@ -10,19 +10,19 @@ import java.math.BigDecimal;
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "app.payment.momo")
-public class MomoProperties {
-    public static final String PROVIDER = "MOMO";
-    public static final String REQUEST_TYPE = "captureWallet";
+@ConfigurationProperties(prefix = "app.payment.payos")
+public class PayosProperties {
+    public static final String PROVIDER = "PAYOS";
     public static final long MAX_AMOUNT = 50_000_000L;
+    public static final int DESCRIPTION_MAX = 9;
 
-    private boolean enabled = true;
-    private String partnerCode = "MOMO";
-    private String accessKey = "F8BBA842ECF85";
-    private String secretKey = "K951B6PE1waDMi640xX08PD3vg6EkVlz";
-    private String endpoint = "https://test-payment.momo.vn/v2/gateway/api/create";
-    private String redirectUrl = "http://localhost:8080/api/v1/storefront/payment/momo/return";
-    private String ipnUrl = "http://localhost:8080/api/v1/storefront/payment/momo/ipn";
+    private boolean enabled = false;
+    private String clientId = "";
+    private String apiKey = "";
+    private String checksumKey = "";
+    private String endpoint = "https://api-merchant.payos.vn/v2/payment-requests";
+    private String returnUrl = "http://localhost:8080/api/v1/storefront/payment/payos/return";
+    private String cancelUrl = "http://localhost:8080/api/v1/storefront/payment/payos/cancel";
     private String clientBaseUrl = "http://localhost:3100";
 
     public String canonical(String method) {
@@ -36,28 +36,27 @@ public class MomoProperties {
             requireReady();
             return;
         }
-        throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED, "Chỉ hỗ trợ COD hoặc MoMo.");
+        throw BusinessException.badRequest(ErrorCode.PAYMENT_METHOD_UNSUPPORTED, "Chỉ hỗ trợ COD hoặc PayOS.");
     }
 
     public void validateAmount(String method, BigDecimal amount) {
         if (!PROVIDER.equals(method) || wholeVnd(amount)) return;
-        throw BusinessException.badRequest(ErrorCode.PAYMENT_AMOUNT_MISMATCH, "MoMo yêu cầu số tiền nguyên đồng lớn hơn 0.");
+        throw BusinessException.badRequest(ErrorCode.PAYMENT_AMOUNT_MISMATCH, "PayOS yêu cầu số tiền nguyên đồng lớn hơn 0.");
     }
 
     public void requireReady() {
         if (ready()) return;
         throw new BusinessException(503, ErrorCode.PAYMENT_NOT_CONFIGURED,
-                "MoMo chưa được cấu hình. Cần partner code, access key, secret key và URL HTTPS.");
+                "PayOS chưa được cấu hình. Cần client id, api key, checksum key và URL HTTPS.");
     }
 
     public boolean ready() {
-        return enabled && filled(partnerCode) && filled(accessKey) && filled(secretKey)
-                && momoEndpoint() && webUrl(redirectUrl) && webUrl(ipnUrl);
+        return enabled && filled(clientId) && filled(apiKey) && filled(checksumKey)
+                && payosEndpoint() && webUrl(returnUrl) && webUrl(cancelUrl);
     }
 
-    private boolean momoEndpoint() {
-        return endpoint != null && (endpoint.startsWith("https://test-payment.momo.vn/")
-                || endpoint.startsWith("https://payment.momo.vn/")) && !endpoint.contains("?");
+    private boolean payosEndpoint() {
+        return endpoint != null && endpoint.startsWith("https://api-merchant.payos.vn/") && !endpoint.contains("?");
     }
 
     private static boolean webUrl(String value) {
