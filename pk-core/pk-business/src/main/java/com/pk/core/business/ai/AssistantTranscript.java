@@ -12,8 +12,15 @@ public final class AssistantTranscript {
     }
 
     public static List<Map<String, Object>> start(String system, String user) {
+        return start(system, List.of(), user);
+    }
+
+    public static List<Map<String, Object>> start(String system, List<AssistantPrior> prior, String user) {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(text("system", system));
+        for (AssistantPrior item : prior) {
+            messages.add(text(item.role(), item.content()));
+        }
         messages.add(text("user", user == null ? "" : user));
         return messages;
     }

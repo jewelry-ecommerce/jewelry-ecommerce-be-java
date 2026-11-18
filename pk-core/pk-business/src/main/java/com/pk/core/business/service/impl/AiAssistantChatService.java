@@ -2,8 +2,10 @@ package com.pk.core.business.service.impl;
 
 import com.pk.core.business.ai.AiCandidate;
 import com.pk.core.business.ai.AiRankingResult;
+import com.pk.core.business.ai.AssistantContext;
 import com.pk.core.business.ai.AssistantReplyParser;
 import com.pk.core.business.ai.AssistantTurn;
+import com.pk.core.model.dto.request.AssistantHistoryItemDto;
 import com.pk.core.business.ai.ShopAssistantService;
 import com.pk.core.business.service.AiAssistantService;
 import com.pk.core.model.dto.response.AssistantMessageResponseDto;
@@ -28,10 +30,10 @@ public class AiAssistantChatService implements AiAssistantService {
     }
 
     @Override
-    public AssistantMessageResponseDto chat(String message) {
+    public AssistantMessageResponseDto chat(String message, List<AssistantHistoryItemDto> history) {
         String text = message == null ? "" : message.trim();
         try {
-            AssistantTurn turn = shop.answer(text);
+            AssistantTurn turn = shop.answer(text, AssistantContext.from(history));
             return reply(turn.draft(), turn.products());
         } catch (Exception ex) {
             log.warn("AI_ASSISTANT_PROVIDER_FALLBACK reason={}", ex.getMessage());

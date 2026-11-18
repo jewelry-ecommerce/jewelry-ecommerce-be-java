@@ -36,7 +36,8 @@ public class AiRest extends AbstractRest {
     public BaseRes assistant(@Valid @RequestBody AssistantMessageRequestDto request,
                              HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
-            return restSuccessHandle.handleSuccess(aiAssistantService.chat(request.getMessage()));
+            return restSuccessHandle.handleSuccess(
+                    aiAssistantService.chat(request.getMessage(), request.getHistory()));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }
