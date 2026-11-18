@@ -80,9 +80,10 @@ public class SecurityConfig {
                         // File riêng tư (CSV import/export): chỉ GET, tự xác thực bằng chữ ký + hạn trong query (exp, sig).
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Storefront.PRIVATE_FILES + "/**")).permitAll()
                         // MoMo: start và return không có Bearer. IPN xác thực bằng HMAC.
-                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/momo/start")).permitAll()
-                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Payment.BASE + "/momo/return")).permitAll()
-                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/momo/ipn")).permitAll()
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/payos/start")).permitAll()
+                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Payment.BASE + "/payos/return")).permitAll()
+                        .requestMatchers(HttpMethod.GET, v1(UrlConstant.Payment.BASE + "/payos/cancel")).permitAll()
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/payos/webhook")).permitAll()
                         // Webhook cổng thanh toán: không có Bearer token, tự xác thực bằng chữ ký (mục F)
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Payment.BASE + "/**")).permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()

@@ -22,15 +22,15 @@ server:
 
 app:
   payment:
-    momo:
-      enabled: ${MOMO_ENABLED:true}
-      partner-code: ${MOMO_PARTNER_CODE:MOMO}
-      access-key: ${MOMO_ACCESS_KEY:F8BBA842ECF85}
-      secret-key: ${MOMO_SECRET_KEY:K951B6PE1waDMi640xX08PD3vg6EkVlz}
-      endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
-      redirect-url: ${MOMO_REDIRECT_URL:http://localhost:8080/api/v1/storefront/payment/momo/return}
-      ipn-url: ${MOMO_IPN_URL:http://localhost:8080/api/v1/storefront/payment/momo/ipn}
-      client-base-url: ${MOMO_CLIENT_BASE_URL:http://localhost:3100}
+    payos:
+      enabled: ${PAYOS_ENABLED:false}
+      client-id: ${PAYOS_CLIENT_ID:}
+      api-key: ${PAYOS_API_KEY:}
+      checksum-key: ${PAYOS_CHECKSUM_KEY:}
+      endpoint: ${PAYOS_ENDPOINT:https://api-merchant.payos.vn/v2/payment-requests}
+      return-url: ${PAYOS_RETURN_URL:http://localhost:8080/api/v1/storefront/payment/payos/return}
+      cancel-url: ${PAYOS_CANCEL_URL:http://localhost:8080/api/v1/storefront/payment/payos/cancel}
+      client-base-url: ${PAYOS_CLIENT_BASE_URL:http://localhost:3100}
   ai:
     enabled: ${AI_ENABLED:false}
     provider: ${AI_PROVIDER:gemini}
@@ -50,7 +50,7 @@ app:
     prompt-cache-retention: ${AI_PROMPT_CACHE_RETENTION:in_memory}
     assistant-max-tool-rounds: ${AI_ASSISTANT_MAX_TOOL_ROUNDS:1}
     assistant-context-turns: ${AI_ASSISTANT_CONTEXT_TURNS:10}
-    shop-brief: ${AI_SHOP_BRIEF:Shop bán trang sức. Khách xem sản phẩm, thêm vào giỏ rồi đặt hàng. Thanh toán COD hoặc MoMo. Phí giao hàng hiện là 0 đồng. Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.}
+    shop-brief: ${AI_SHOP_BRIEF:Shop bán trang sức. Khách xem sản phẩm, thêm vào giỏ rồi đặt hàng. Thanh toán COD hoặc PayOS. Phí giao hàng hiện là 0 đồng. Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.}
     max-candidates: ${AI_MAX_CANDIDATES:24}
     min-recommendations: ${AI_MIN_RECOMMENDATIONS:3}
     max-recommendations: ${AI_MAX_RECOMMENDATIONS:6}
