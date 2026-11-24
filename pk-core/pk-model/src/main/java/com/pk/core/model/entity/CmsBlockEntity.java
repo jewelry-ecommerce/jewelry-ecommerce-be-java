@@ -26,10 +26,13 @@ public class CmsBlockEntity extends UpdateEntity {
     public static final String PRODUCT_CAROUSEL = "PRODUCT_CAROUSEL";
     public static final String INFO_CARDS = "INFO_CARDS";
     public static final String IMAGE_GALLERY = "IMAGE_GALLERY";
+    public static final String CTA_BLOCK = "CTA_BLOCK";
+    public static final String TOP_LINE_BANNER = "TOP_LINE_BANNER";
+    public static final String NEWSLETTER_SIGNUP = "NEWSLETTER_SIGNUP";
 
     public static final java.util.Set<String> TYPES = java.util.Set.of(BANNER, PRODUCT_CAROUSEL, "PRODUCT_LIST",
             INFO_CARDS, IMAGE_GALLERY, "PRODUCT_CATEGORY_NAV", "PRODUCT_COLLECTION_SHOWCASE",
-            "PRODUCT_EXPANDABLE_DESCRIPTION");
+            "PRODUCT_EXPANDABLE_DESCRIPTION", CTA_BLOCK, TOP_LINE_BANNER, NEWSLETTER_SIGNUP);
 
     @Id
     @PrimaryKey(generationType = GenerationType.SEQUENCE, generator = "cms_blocks_id_seq")

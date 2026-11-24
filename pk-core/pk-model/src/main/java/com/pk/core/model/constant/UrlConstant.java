@@ -86,14 +86,13 @@ public class UrlConstant {
         /** Callback: BASE + "/{paymentId}/callback". */
     }
 
-    /** AiRest (pk-api) - AI Stylist / Smart Set Builder. Recommend/set-builder công khai;
+    /** AiRest (pk-api) - AI Stylist. Recommend công khai;
      * feedback/history yêu cầu đăng nhập (SecurityConfig). */
     @UtilityClass
     public static class Ai {
         public final String BASE = Storefront.BASE + "/ai";
         public final String ASSISTANT = BASE + "/assistant";
         public final String STYLIST_RECOMMENDATIONS = BASE + "/stylist/recommendations";
-        public final String SET_BUILDER = BASE + "/set-builder";
         public final String STYLIST_FEEDBACK = BASE + "/stylist/feedback";
         public final String STYLIST_SESSIONS = BASE + "/stylist/sessions";
     }

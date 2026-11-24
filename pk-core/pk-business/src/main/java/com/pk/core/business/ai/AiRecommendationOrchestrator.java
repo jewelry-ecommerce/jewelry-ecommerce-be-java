@@ -77,22 +77,6 @@ public class AiRecommendationOrchestrator {
         return assembled(ranked, decorate(pool, ranked, limit));
     }
 
-    public AiAssembledResult buildSet(StylistRequestDto request, Long userId) {
-        List<AiCandidate> pool = loadCandidates(request, userId);
-        if (pool.isEmpty()) {
-            throw invalidSet("Không đủ sản phẩm để tạo bộ");
-        }
-        AiRankingResult ranked = rank(request, pool, true);
-        try {
-            return finishSet(request, ranked, pool);
-        } catch (BusinessException ex) {
-            if (!retryWithRules(ranked, ex)) {
-                throw ex;
-            }
-            return finishSet(request, rulesResult(request, pool, true), pool);
-        }
-    }
-
     private List<AiCandidate> loadCandidates(StylistRequestDto request, Long userId) {
         List<ProductEntity> found = products.searchPublished("", "", "", "", BigDecimal.ZERO, OPEN_MAX);
         List<AiCandidate> occasioned = preferOccasion(enrich(found), request.getOccasion());
@@ -277,47 +261,6 @@ public class AiRecommendationOrchestrator {
                 AiRankingResult.FALLBACK_BANNER, picks);
     }
 
-    private AiAssembledResult finishSet(StylistRequestDto request, AiRankingResult ranked, List<AiCandidate> pool) {
-        return assembled(ranked, selectSet(request, decorate(pool, ranked, pool.size())));
-    }
-
-    private List<AiDecoratedPick> selectSet(StylistRequestDto request, List<AiDecoratedPick> ordered) {
-        boolean setBudget = AiBudgetBand.SET.equals(AiBudgetBand.scope(request)) && request.getBudget() != null;
-        BigDecimal upper = AiBudgetBand.of(request.getBudget(), properties.getBudgetToleranceRatio()).upper();
-        List<AiDecoratedPick> chosen = new ArrayList<>();
-        Set<Long> slots = new HashSet<>();
-        BigDecimal total = BigDecimal.ZERO;
-        boolean budgetBlocked = false;
-        for (AiDecoratedPick pick : ordered) {
-            if (chosen.size() >= Math.max(1, properties.getMaxSetItems())) {
-                break;
-            }
-            if (!slots.add(slot(pick))) {
-                continue;
-            }
-            BigDecimal next = total.add(priceOf(pick));
-            if (setBudget && next.compareTo(upper) > 0) {
-                slots.remove(slot(pick));
-                budgetBlocked = true;
-                continue;
-            }
-            chosen.add(pick);
-            total = next;
-        }
-        ensureSetSize(chosen, budgetBlocked);
-        return chosen;
-    }
-
-    private void ensureSetSize(List<AiDecoratedPick> chosen, boolean budgetBlocked) {
-        if (chosen.size() >= Math.max(1, properties.getMinSetItems())) {
-            return;
-        }
-        if (budgetBlocked) {
-            throw budgetExceeded();
-        }
-        throw invalidSet("Không đủ món khác danh mục để tạo bộ");
-    }
-
     private List<AiCandidate> excludeDisliked(List<AiCandidate> source, Long userId) {
         if (userId == null) {
             return source;
@@ -422,29 +365,13 @@ public class AiRecommendationOrchestrator {
         return pick.candidate().price() == null ? BigDecimal.ZERO : pick.candidate().price();
     }
 
-    private static Long slot(AiDecoratedPick pick) {
-        Long categoryId = pick.candidate().categoryId();
-        return categoryId != null ? categoryId : -pick.candidate().productId();
-    }
-
     private int minimum(boolean setMode) {
         int configured = setMode ? properties.getMinSetItems() : properties.getMinRecommendations();
         return Math.max(1, configured);
     }
 
-    private static boolean retryWithRules(AiRankingResult ranked, BusinessException ex) {
-        if (ranked == null || !AiRankingResult.SOURCE_AI.equals(ranked.source())) {
-            return false;
-        }
-        return ErrorCode.AI_SET_INVALID.equals(ex.getCode()) || ErrorCode.AI_BUDGET_EXCEEDED.equals(ex.getCode());
-    }
-
     private static BusinessException budgetExceeded() {
         return BusinessException.badRequest(ErrorCode.AI_BUDGET_EXCEEDED,
                 "Không có sản phẩm trong khoảng ngân sách cho phép");
-    }
-
-    private static BusinessException invalidSet(String message) {
-        return BusinessException.badRequest(ErrorCode.AI_SET_INVALID, message);
     }
 }

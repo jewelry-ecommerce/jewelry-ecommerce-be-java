@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Gợi ý stylist / set-builder công khai. Feedback và lịch sử phiên bắt buộc đăng nhập. */
+/** Gợi ý stylist công khai. Feedback và lịch sử phiên bắt buộc đăng nhập. */
 @RestController
 @RequestMapping(UrlConstant.Common.API + UrlConstant.Common.VERSION)
 @RequiredArgsConstructor
@@ -49,17 +49,6 @@ public class AiRest extends AbstractRest {
                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(aiStylistService.recommend(request, userId(principal)));
-        } catch (Exception ex) {
-            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
-        }
-    }
-
-    @PostMapping(UrlConstant.Ai.SET_BUILDER)
-    public BaseRes setBuilder(@AuthenticationPrincipal SecurityUser principal,
-                               @Valid @RequestBody StylistRequestDto request,
-                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        try {
-            return restSuccessHandle.handleSuccess(aiStylistService.buildSet(request, userId(principal)));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

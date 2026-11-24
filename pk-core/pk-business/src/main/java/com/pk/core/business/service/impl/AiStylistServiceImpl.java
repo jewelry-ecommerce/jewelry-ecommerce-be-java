@@ -16,8 +16,6 @@ import com.pk.core.common.exception.BusinessException;
 import com.pk.core.common.exception.ErrorCode;
 import com.pk.core.model.dto.request.StylistFeedbackRequestDto;
 import com.pk.core.model.dto.request.StylistRequestDto;
-import com.pk.core.model.dto.response.SetItemResponseDto;
-import com.pk.core.model.dto.response.SetResponseDto;
 import com.pk.core.model.dto.response.StylistFeedbackResponseDto;
 import com.pk.core.model.dto.response.StylistRecommendationListResponseDto;
 import com.pk.core.model.dto.response.StylistRecommendationResponseDto;
@@ -56,15 +54,6 @@ public class AiStylistServiceImpl implements AiStylistService {
         Long sessionId = persist(req, userId, result);
         return new StylistRecommendationListResponseDto(result.source(), result.banner(), sessionId,
                 toRecommendations(result));
-    }
-
-    @Transactional
-    @Override
-    public SetResponseDto buildSet(StylistRequestDto req, Long userId) {
-        normalize(req);
-        AiAssembledResult result = orchestrator.buildSet(req, userId);
-        Long sessionId = persist(req, userId, result);
-        return toSet(req, result, sessionId);
     }
 
     @Transactional
@@ -171,35 +160,6 @@ public class AiStylistServiceImpl implements AiStylistService {
         return new StylistRecommendationResponseDto("PRODUCT", pick.candidate().productId(),
                 pick.candidate().name(), pick.candidate().slug(), pick.candidate().thumbnailUrl(),
                 pick.reason(), pick.matchScore(), pick.candidate().skuId(), pick.candidate().skuCode(),
-                pick.candidate().price(), pick.candidate().stock(), source);
-    }
-
-    private SetResponseDto toSet(StylistRequestDto req, AiAssembledResult result, Long sessionId) {
-        String name = "Set gợi ý cho dịp " + req.getOccasion();
-        String description = result.banner() == null
-                ? "Bộ trang sức gợi ý theo dịp và ngân sách"
-                : result.banner();
-        return new SetResponseDto("SET" + System.currentTimeMillis(), name, description, BigDecimal.ZERO,
-                toSetItems(result), result.source(), result.banner(), result.totalPrice(), sessionId);
-    }
-
-    private static List<SetItemResponseDto> toSetItems(AiAssembledResult result) {
-        List<SetItemResponseDto> items = new ArrayList<>();
-        if (result.picks() == null) {
-            return items;
-        }
-        int order = 0;
-        for (AiDecoratedPick pick : result.picks()) {
-            items.add(toSetItem(pick, result.source(), order));
-            order++;
-        }
-        return items;
-    }
-
-    private static SetItemResponseDto toSetItem(AiDecoratedPick pick, String source, int order) {
-        return new SetItemResponseDto(pick.candidate().productId(), pick.candidate().name(),
-                pick.candidate().slug(), pick.candidate().thumbnailUrl(), pick.candidate().categoryName(),
-                order == 0, order, pick.candidate().skuId(), pick.candidate().skuCode(),
                 pick.candidate().price(), pick.candidate().stock(), source);
     }
 
