@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.pk.core.identity.security.model.SecurityUser;
 import com.pk.core.common.web.PageResponse;
+import com.pk.core.model.dto.response.ProductResponseDto;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.math.BigDecimal;
@@ -152,6 +153,33 @@ public class ProductRest extends AbstractRest {
     public BaseRes collections(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(collectionService.findAllPublished());
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    /**
+     * Sản phẩm liên quan (cùng danh mục) — FE alias {@code catalog/products/related?productSlug=}.
+     * Đặt trước {@code /{slug}} để không bị nuốt path.
+     */
+    @GetMapping(UrlConstant.Product.BASE + "/related")
+    public BaseRes related(@RequestParam String productSlug,
+                            @RequestParam(required = false, defaultValue = "8") int take,
+                            HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            var seed = productService.findBySlug(productSlug);
+            String categorySlug = seed.getCategorySlug();
+            if (categorySlug == null || categorySlug.isBlank()) {
+                return restSuccessHandle.handleSuccess(PageResponse.paginate(List.of(), 1, take));
+            }
+            PageResponse<ProductResponseDto> page = productService.search(
+                    new ProductSearchQuery(categorySlug, List.of(), null, null, null, null, null, List.of(), null,
+                            "NEWEST", 1, Math.max(take + 4, 12)));
+            List<ProductResponseDto> filtered = page.content().stream()
+                    .filter(dto -> !productSlug.equals(dto.getSlug()))
+                    .limit(Math.max(1, Math.min(take, 24)))
+                    .toList();
+            return restSuccessHandle.handleSuccess(PageResponse.paginate(filtered, 1, take));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

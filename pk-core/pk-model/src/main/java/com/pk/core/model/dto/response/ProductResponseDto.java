@@ -409,6 +409,17 @@ public class ProductResponseDto extends BaseDto {
     private static final String[][] ATTRS = {
             {"size", "Kích cỡ"}, {"material", "Chất liệu"}, {"gemstone", "Đá chủ"}, {"metal_color", "Màu kim loại"}};
 
+    /** Binding admin trùng cột built-in (sizeLabel / metalColorLabel) không tạo selector thứ hai. */
+    private static boolean isAliasOfBuiltinAttr(String code) {
+        if (code == null || code.isBlank()) {
+            return false;
+        }
+        String normalized = code.trim().toUpperCase().replace('-', '_');
+        return "SIZE".equals(normalized) || "JEW_SIZE".equals(normalized)
+                || "METAL_COLOR".equals(normalized) || "JEW_METAL_COLOR".equals(normalized)
+                || "COLOR".equals(normalized) || "DEMO_COLOR".equals(normalized);
+    }
+
     private static String attrValue(ProductSkuResponseDto s, int idx) {
         String v = switch (idx) {
             case 0 -> s.getSizeLabel();
@@ -462,7 +473,7 @@ public class ProductResponseDto extends BaseDto {
             int idx = ATTRS.length;
             for (Map<String, Object> b : s.getAttributeBindings()) {
                 String code = String.valueOf(b.get("code"));
-                if (flat.containsKey(code)) {
+                if (flat.containsKey(code) || isAliasOfBuiltinAttr(code)) {
                     continue;
                 }
                 Map<String, Object> def = new LinkedHashMap<>();
@@ -504,6 +515,10 @@ public class ProductResponseDto extends BaseDto {
                 }
                 for (Map<String, Object> b : s.getAttributeBindings()) {
                     String code = String.valueOf(b.get("code"));
+                    // Trùng nghĩa với cột có sẵn (sizeLabel / metalColorLabel) → không nhân đôi selector.
+                    if (isAliasOfBuiltinAttr(code)) {
+                        continue;
+                    }
                     if (seen.add(code)) {
                         keys.add(new String[] {code, String.valueOf(b.get("name")), String.valueOf(b.get("id"))});
                     }
