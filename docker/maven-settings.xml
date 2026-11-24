@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Render Docker builds hit Maven Central 429; prefer Google mirror + retries. -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>google-maven-central</id>
+      <name>GCS Maven Central mirror</name>
+      <url>https://maven-central.storage-download.googleapis.com/maven2</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+  <profiles>
+    <profile>
+      <id>render-http-retries</id>
+      <properties>
+        <aether.connector.http.retryHandler.count>5</aether.connector.http.retryHandler.count>
+        <aether.connector.http.retryHandler.requestSentEnabled>true</aether.connector.http.retryHandler.requestSentEnabled>
+        <maven.wagon.http.retryHandler.count>5</maven.wagon.http.retryHandler.count>
+      </properties>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>render-http-retries</activeProfile>
+  </activeProfiles>
+</settings>
