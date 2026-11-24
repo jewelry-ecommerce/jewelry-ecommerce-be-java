@@ -78,7 +78,7 @@ public class PayosGateway {
         return url != null && url.startsWith("https://pay.payos.vn/");
     }
 
-    static String describe(String orderCode) {
+    public static String describe(String orderCode) {
         String digits = orderCode == null ? "" : orderCode.replaceAll("[^A-Za-z0-9]", "");
         if (digits.isBlank()) return "JEWELRY";
         return digits.length() <= PayosProperties.DESCRIPTION_MAX
