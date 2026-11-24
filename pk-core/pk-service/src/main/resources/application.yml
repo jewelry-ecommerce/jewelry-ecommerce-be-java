@@ -87,6 +87,9 @@ app:
   seed:
     enabled: ${SEED_ENABLED:false}
   upload:
+    # local = disk (Render ephemeral mất file khi redeploy). cloudinary = URL res.cloudinary.com bền.
+    # Profile `cloud` (application-cloud.yml) set provider=cloudinary + CLOUDINARY_* trên Render.
+    provider: ${UPLOAD_PROVIDER:local}
     # Thư mục lưu file upload tạm (mặc định ổ D). public-base-url: tiền tố tuyệt đối trả cho FE, vd http://localhost:8080
     # Một thư mục gốc cho mọi file, tách folder: images/, videos/ (công khai) và private/import-export/ (CSV, KHÔNG công khai).
     # Trên cloud nên trỏ UPLOAD_DIR vào ổ bền (persistent disk); ổ tạm thì file mất khi máy dựng lại (ảnh) hoặc phải xuất lại (CSV).
