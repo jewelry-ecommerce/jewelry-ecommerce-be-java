@@ -76,7 +76,7 @@ class AdminDashboardIT extends IntegrationTestBase {
         assertEquals(revBefore + grand, kpi(after, "net_revenue").get("value").asDouble(), 0.5);
         assertEquals(ordersBefore + 1, kpi(after, "order_count").get("value").asDouble(), 0.001);
 
-        // Chuỗi doanh thu: nhãn và hai series cùng độ dài; tổng series Revenue = KPI.
+        // Chuỗi doanh thu: nhãn và hai series cùng độ dài; tổng series Doanh thu = KPI.
         JsonNode rev = after.get("revenue");
         assertEquals(rev.get("labels").size(), rev.get("series").get(0).get("values").size());
         double sum = 0;

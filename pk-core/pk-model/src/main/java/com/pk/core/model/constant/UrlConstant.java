@@ -69,6 +69,19 @@ public class UrlConstant {
         public final String GUEST = BASE + "/guest";
     }
 
+    /** OrderReturnClientRest — khách tạo/xem/huỷ yêu cầu đổi trả (FE: order/order-returns/client). */
+    @UtilityClass
+    public static class OrderReturnClient {
+        public final String BASE = Storefront.BASE + "/order-returns";
+    }
+
+    /** GhnRest — tính phí / tạo vận đơn staging GHN (đồ án). */
+    @UtilityClass
+    public static class Ghn {
+        public final String BASE = Storefront.BASE + "/shipping/ghn";
+        public final String FEE = BASE + "/fee";
+    }
+
     /** CheckoutRest (pk-api) - xem trước giá đơn hàng, không cần đăng nhập (dựa cart context gửi
      * kèm, giống OrderRest.create). */
     @UtilityClass

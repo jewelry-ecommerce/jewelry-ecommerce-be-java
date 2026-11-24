@@ -134,10 +134,10 @@ public class DashboardServiceImpl implements DashboardService {
                 && day(u.getCreatedDate()).isBefore(w[0])).count();
 
         List<Kpi> kpis = List.of(
-                kpi("net_revenue", "Net revenue", rev, prevRev, "CURRENCY", "Confirmed through delivered orders, minus refunds"),
-                kpi("order_count", "Orders", cnt, prevCnt, "NUMBER", "Confirmed through delivered orders"),
-                kpi("average_order_value", "Average order value", aov, prevAov, "CURRENCY", "Net revenue divided by orders"),
-                kpi("new_customers", "New customers", newCust, prevNewCust, "NUMBER", "Accounts registered in this period"));
+                kpi("net_revenue", "Doanh thu thuần", rev, prevRev, "CURRENCY", "Đơn đã xác nhận đến đã giao, trừ hoàn tiền"),
+                kpi("order_count", "Số đơn hàng", cnt, prevCnt, "NUMBER", "Đơn đã xác nhận đến đã giao"),
+                kpi("average_order_value", "Giá trị đơn trung bình", aov, prevAov, "CURRENCY", "Doanh thu thuần chia cho số đơn"),
+                kpi("new_customers", "Khách hàng mới", newCust, prevNewCust, "NUMBER", "Tài khoản đăng ký trong kỳ"));
 
         Map<String, Long> byStatus = new LinkedHashMap<>();
         cur.stream().sorted(Comparator.comparing(OrderEntity::getStatus))
@@ -176,7 +176,7 @@ public class DashboardServiceImpl implements DashboardService {
                 counts.add((double) in.size());
             }
         }
-        return new SeriesSet(labels, List.of(new Series("Revenue", revenue), new Series("Orders", counts)));
+        return new SeriesSet(labels, List.of(new Series("Doanh thu", revenue), new Series("Đơn hàng", counts)));
     }
 
     private List<RecentOrder> recent(List<OrderEntity> all, int limit) {

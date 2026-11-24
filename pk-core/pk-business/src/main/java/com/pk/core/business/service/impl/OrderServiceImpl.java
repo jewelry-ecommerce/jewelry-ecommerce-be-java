@@ -19,6 +19,7 @@ import com.pk.core.business.repository.PaymentRepo;
 import com.pk.core.business.repository.ProductRepo;
 import com.pk.core.business.repository.ProductSkuRepo;
 import com.pk.core.business.payment.PayosProperties;
+import com.pk.core.business.service.GhnShippingService;
 import com.pk.core.business.service.OrderService;
 import com.pk.core.business.service.PromotionPricingService;
 import com.pk.core.business.service.PreOrderService;
@@ -65,6 +66,7 @@ import java.util.Map;
 public class OrderServiceImpl implements OrderService {
 
     private final PayosProperties payos;
+    private final GhnShippingService ghnShipping;
     private final OrderRepo orders;
     private final UserRepo users;
     private final OrderItemRepo orderItems;
@@ -609,6 +611,13 @@ public class OrderServiceImpl implements OrderService {
         }
         if (request.getTrackingCode() != null && !request.getTrackingCode().isBlank()) {
             order.setTrackingCode(request.getTrackingCode());
+        } else if (OrderEntity.SHIPPING.equals(newStatus)
+                && (order.getTrackingCode() == null || order.getTrackingCode().isBlank())) {
+            Map<String, Object> shipment = ghnShipping.createShipmentForOrder(order);
+            Object ghnCode = shipment.get("order_code");
+            if (ghnCode != null && !String.valueOf(ghnCode).isBlank()) {
+                order.setTrackingCode(String.valueOf(ghnCode));
+            }
         }
         order.touch();
         orders.update(order);
@@ -623,6 +632,9 @@ public class OrderServiceImpl implements OrderService {
                 ? request.getNote() : "Admin cập nhật trạng thái từ " + oldStatus + " sang " + newStatus;
         if (codCollected) {
             note = note + " (đã thu tiền COD)";
+        }
+        if (OrderEntity.SHIPPING.equals(newStatus) && order.getTrackingCode() != null) {
+            note = note + " (GHN " + order.getTrackingCode() + ")";
         }
         orderTimelines.create(new OrderTimelineEntity(order.getId(), newStatus, note, "ADMIN"));
 

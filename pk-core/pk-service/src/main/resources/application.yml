@@ -21,6 +21,18 @@ server:
   shutdown: graceful
 
 app:
+  ghn:
+    enabled: ${GHN_ENABLED:false}
+    token: ${GHN_TOKEN:}
+    shop-id: ${GHN_SHOP_ID:0}
+    base-url: ${GHN_BASE_URL:https://dev-online-gateway.ghn.vn}
+    service-type-id: ${GHN_SERVICE_TYPE_ID:2}
+    default-weight-grams: ${GHN_DEFAULT_WEIGHT_GRAMS:200}
+    default-length-cm: ${GHN_DEFAULT_LENGTH_CM:20}
+    default-width-cm: ${GHN_DEFAULT_WIDTH_CM:15}
+    default-height-cm: ${GHN_DEFAULT_HEIGHT_CM:10}
+    from-district-id: ${GHN_FROM_DISTRICT_ID:1442}
+    from-ward-code: ${GHN_FROM_WARD_CODE:21211}
   payment:
     payos:
       enabled: ${PAYOS_ENABLED:false}
