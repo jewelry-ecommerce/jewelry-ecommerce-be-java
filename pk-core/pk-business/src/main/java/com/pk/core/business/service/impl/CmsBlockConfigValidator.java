@@ -55,6 +55,7 @@ public final class CmsBlockConfigValidator {
             case "CTA_BLOCK" -> ctaBlock(config);
             case "TOP_LINE_BANNER" -> topLineBanner(config);
             case "NEWSLETTER_SIGNUP" -> newsletterSignup(config);
+            case "TEXT_BLOCK" -> textBlock(config);
             default -> {
                 // loại khác do CmsServiceImpl kiểm
             }
@@ -232,6 +233,12 @@ public final class CmsBlockConfigValidator {
     private static void newsletterSignup(Map<String, Object> c) {
         requiredText(c, "heading", "config.heading");
         requiredText(c, "consentText", "config.consentText");
+    }
+
+    /** FE CmsTextBlock: title (tuỳ chọn) + content HTML (bắt buộc). */
+    private static void textBlock(Map<String, Object> c) {
+        optText(c, "title", "config.title");
+        requiredText(c, "content", "config.content");
     }
 
     private static void optColor(Map<String, Object> parent, String key, String path) {
