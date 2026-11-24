@@ -771,7 +771,8 @@ public class CmsServiceImpl implements CmsService {
             validateCarouselConfig(config);
         } else {
             // INFO_CARDS, IMAGE_GALLERY, PRODUCT_LIST, PRODUCT_CATEGORY_NAV, PRODUCT_COLLECTION_SHOWCASE,
-            // PRODUCT_EXPANDABLE_DESCRIPTION: kiểm theo schema FE (field lạ được giữ nguyên).
+            // PRODUCT_EXPANDABLE_DESCRIPTION, CTA_BLOCK, TOP_LINE_BANNER, NEWSLETTER_SIGNUP:
+            // kiểm theo schema FE (field lạ được giữ nguyên).
             CmsBlockConfigValidator.validate(type, config);
         }
     }

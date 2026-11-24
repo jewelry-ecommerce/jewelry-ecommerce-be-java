@@ -11,7 +11,8 @@ import com.pk.core.common.exception.ErrorCode;
 
 /**
  * Kiểm tra cấu trúc `config` của các block CMS do FE gửi (INFO_CARDS, IMAGE_GALLERY, PRODUCT_LIST,
- * PRODUCT_CATEGORY_NAV, PRODUCT_COLLECTION_SHOWCASE, PRODUCT_EXPANDABLE_DESCRIPTION) theo đúng schema FE
+ * PRODUCT_CATEGORY_NAV, PRODUCT_COLLECTION_SHOWCASE, PRODUCT_EXPANDABLE_DESCRIPTION, CTA_BLOCK,
+ * TOP_LINE_BANNER, NEWSLETTER_SIGNUP) theo đúng schema FE
  * (jewelry-ecommerce-admin/.../cms/source-schema). Chỉ kiểm field FE đã khai báo; field lạ được GIỮ NGUYÊN
  * (không từ chối, không xoá). Giá trị null của field tuỳ chọn coi như không gửi. Lỗi trả 400
  * {@link ErrorCode#CMS_BLOCK_CONFIG_INVALID} kèm đường dẫn field (vd `config.items[0].imageUrl`).
@@ -26,10 +27,18 @@ public final class CmsBlockConfigValidator {
     private static final Set<String> LIST_SORTS = Set.of("best_selling", "price_asc", "price_desc", "newest", "name",
             "name_desc");
     private static final Set<String> LIST_BANNER_SOURCES = Set.of("CMS_STOREFRONT");
+    private static final Set<String> CTA_ALIGNMENTS = Set.of("LEFT", "CENTER", "RIGHT");
+    private static final Set<String> CTA_TARGETS = Set.of("_self", "_blank");
+    private static final Set<String> TOP_LINE_ANIMATIONS = Set.of("STATIC", "MARQUEE", "FADE");
+    private static final Set<String> TOP_LINE_ACTIONS = Set.of("NONE", "LINK", "OPEN_MODAL");
+    private static final int CTA_MAX_BUTTONS = 3;
     private static final int SHOWCASE_MAX_ITEMS = 3;
     private static final int MAX_URL_LENGTH = 2048;
     private static final Pattern SCHEME = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:.*");
     private static final Pattern BAD_URL_CHARS = Pattern.compile("[\\s\\p{Cntrl}<>\"'\\\\]");
+    private static final Pattern CTA_COLOR = Pattern.compile(
+            "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$");
+    private static final Pattern CTA_URL = Pattern.compile("^(https?://[^\\s\\\\]+|/(?!/)[^\\s\\\\]*|[?#][^\\s\\\\]*)$");
 
     private CmsBlockConfigValidator() {
     }
@@ -43,6 +52,9 @@ public final class CmsBlockConfigValidator {
             case "PRODUCT_CATEGORY_NAV" -> categoryNav(config);
             case "PRODUCT_COLLECTION_SHOWCASE" -> collectionShowcase(config);
             case "PRODUCT_EXPANDABLE_DESCRIPTION" -> expandableDescription(config);
+            case "CTA_BLOCK" -> ctaBlock(config);
+            case "TOP_LINE_BANNER" -> topLineBanner(config);
+            case "NEWSLETTER_SIGNUP" -> newsletterSignup(config);
             default -> {
                 // loại khác do CmsServiceImpl kiểm
             }
@@ -149,6 +161,86 @@ public final class CmsBlockConfigValidator {
         Integer lines = optInt(c, "maxCollapsedLines", "config.maxCollapsedLines");
         if (lines != null && lines < 1) {
             throw invalid("config.maxCollapsedLines", "phải >= 1");
+        }
+    }
+
+    private static void ctaBlock(Map<String, Object> c) {
+        optText(c, "title", "config.title");
+        optColor(c, "titleColor", "config.titleColor");
+        optText(c, "description", "config.description");
+        optColor(c, "descriptionColor", "config.descriptionColor");
+        optText(c, "bottomText", "config.bottomText");
+        optColor(c, "bottomTextColor", "config.bottomTextColor");
+        optEnum(c, "alignment", "config.alignment", CTA_ALIGNMENTS);
+        Map<String, Object> background = optObject(c, "background", "config.background");
+        if (background != null) {
+            optColor(background, "color", "config.background.color");
+            optColor(background, "borderColor", "config.background.borderColor");
+            Integer radius = optInt(background, "borderRadius", "config.background.borderRadius");
+            if (radius != null && radius < 0) {
+                throw invalid("config.background.borderRadius", "phải >= 0");
+            }
+        }
+        List<Map<String, Object>> buttons = optObjects(c, "buttons", "config.buttons");
+        if (buttons.size() > CTA_MAX_BUTTONS) {
+            throw invalid("config.buttons", "tối đa " + CTA_MAX_BUTTONS + " nút");
+        }
+        for (int i = 0; i < buttons.size(); i++) {
+            String path = "config.buttons[" + i + "]";
+            Map<String, Object> button = buttons.get(i);
+            optText(button, "label", path + ".label");
+            Object url = button.get("url");
+            if (url instanceof String urlText && !urlText.isBlank() && !CTA_URL.matcher(urlText.trim()).matches()) {
+                throw invalid(path + ".url", "không hợp lệ");
+            }
+            optColor(button, "textColor", path + ".textColor");
+            optColor(button, "backgroundColor", path + ".backgroundColor");
+            optColor(button, "borderColor", path + ".borderColor");
+            optEnum(button, "target", path + ".target", CTA_TARGETS);
+        }
+    }
+
+    private static void topLineBanner(Map<String, Object> c) {
+        Map<String, Object> settings = optObject(c, "settings", "config.settings");
+        if (settings != null) {
+            optEnum(settings, "animationType", "config.settings.animationType", TOP_LINE_ANIMATIONS);
+            optColor(settings, "backgroundColor", "config.settings.backgroundColor");
+            optColor(settings, "textColor", "config.settings.textColor");
+            Integer speed = optInt(settings, "animationSpeed", "config.settings.animationSpeed");
+            if (speed != null && speed < 1) {
+                throw invalid("config.settings.animationSpeed", "phải >= 1");
+            }
+        }
+        Map<String, Object> badge = optObject(c, "badge", "config.badge");
+        if (badge != null) {
+            optText(badge, "text", "config.badge.text");
+            optColor(badge, "textColor", "config.badge.textColor");
+            optColor(badge, "backgroundColor", "config.badge.backgroundColor");
+            optEnum(badge, "actionType", "config.badge.actionType", TOP_LINE_ACTIONS);
+            optUrl(badge, "actionUrl", "config.badge.actionUrl", true);
+        }
+        List<Map<String, Object>> items = requiredObjects(c, "items", "config.items", 1, Integer.MAX_VALUE);
+        for (int i = 0; i < items.size(); i++) {
+            String path = "config.items[" + i + "]";
+            requiredText(items.get(i), "text", path + ".text");
+            optEnum(items.get(i), "actionType", path + ".actionType", TOP_LINE_ACTIONS);
+            optUrl(items.get(i), "actionUrl", path + ".actionUrl", true);
+            optText(items.get(i), "trackingId", path + ".trackingId");
+        }
+    }
+
+    private static void newsletterSignup(Map<String, Object> c) {
+        requiredText(c, "heading", "config.heading");
+        requiredText(c, "consentText", "config.consentText");
+    }
+
+    private static void optColor(Map<String, Object> parent, String key, String path) {
+        Object value = parent.get(key);
+        if (value == null) {
+            return;
+        }
+        if (!(value instanceof String text) || text.isBlank() || !CTA_COLOR.matcher(text.trim()).matches()) {
+            throw invalid(path, "phải là màu hex hoặc transparent");
         }
     }
 

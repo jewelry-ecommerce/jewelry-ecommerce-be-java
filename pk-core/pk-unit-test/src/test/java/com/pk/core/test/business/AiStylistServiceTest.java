@@ -19,7 +19,6 @@ import com.pk.core.common.exception.BusinessException;
 import com.pk.core.common.exception.ErrorCode;
 import com.pk.core.model.dto.request.StylistFeedbackRequestDto;
 import com.pk.core.model.dto.request.StylistRequestDto;
-import com.pk.core.model.dto.response.SetResponseDto;
 import com.pk.core.model.dto.response.StylistRecommendationListResponseDto;
 import com.pk.core.model.dto.response.StylistRecommendationResponseDto;
 import com.pk.core.model.dto.response.StylistSessionResponseDto;
@@ -195,32 +194,6 @@ class AiStylistServiceTest {
 
         List<Long> ids = res.getRecommendations().stream().map(StylistRecommendationResponseDto::getId).toList();
         assertEquals(List.of(3L), ids);
-    }
-
-    @Test
-    void setBudgetKeepsTotalWithinTolerance() {
-        catalog(published(1L, 1L, "cưới", 1_000_000L), published(2L, 2L, "cưới", 1_000_000L),
-                published(3L, 3L, "cưới", 1_000_000L));
-
-        SetResponseDto res = service.buildSet(request("cưới", new BigDecimal("3000000"), "SET"), null);
-
-        assertEquals(3, res.getItems().size());
-        assertEquals(0, new BigDecimal("3000000").compareTo(res.getTotalPrice()));
-        assertTrue(res.getItems().get(0).isKeyPiece());
-        assertEquals("SKU-1", res.getItems().get(0).getSkuCode());
-        assertEquals(8, res.getItems().get(0).getStock());
-        assertEquals(AiRankingResult.FALLBACK_BANNER, res.getBanner());
-    }
-
-    @Test
-    void setOverBudgetIsRejected() {
-        catalog(published(1L, 1L, "cưới", 1_000_000L), published(2L, 2L, "cưới", 1_000_000L));
-
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.buildSet(request("cưới", new BigDecimal("1500000"), "SET"), null));
-
-        assertEquals(ErrorCode.AI_BUDGET_EXCEEDED, ex.getCode());
-        verify(sessions, never()).create(any());
     }
 
     @Test

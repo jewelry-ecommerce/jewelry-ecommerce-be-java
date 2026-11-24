@@ -167,4 +167,27 @@ class CmsBlockConfigValidatorTest {
     void otherTypesAreIgnored() {
         assertDoesNotThrow(() -> CmsBlockConfigValidator.validate("BANNER", new HashMap<>()));
     }
+
+    @Test
+    void ctaBlockRules() {
+        Map<String, Object> button = new HashMap<>(Map.of("label", "Xem", "url", "/san-pham", "target", "_self"));
+        Map<String, Object> cfg = new HashMap<>(Map.of(
+                "title", "Khám phá",
+                "alignment", "CENTER",
+                "buttons", List.of(button),
+                "background", Map.of("color", "#FFFFFF", "borderRadius", 40)));
+        assertDoesNotThrow(() -> CmsBlockConfigValidator.validate("CTA_BLOCK", cfg));
+        cfg.put("alignment", "MIDDLE");
+        assertEquals("config.alignment", fail("CTA_BLOCK", cfg).getField());
+    }
+
+    @Test
+    void topLineAndNewsletterRules() {
+        assertDoesNotThrow(() -> CmsBlockConfigValidator.validate("TOP_LINE_BANNER",
+                Map.of("items", List.of(Map.of("text", "Freeship đơn từ 500K")))));
+        assertEquals("config.items", fail("TOP_LINE_BANNER", Map.of()).getField());
+        assertDoesNotThrow(() -> CmsBlockConfigValidator.validate("NEWSLETTER_SIGNUP",
+                Map.of("heading", "Nhận tin", "consentText", "Đồng ý chính sách")));
+        assertEquals("config.heading", fail("NEWSLETTER_SIGNUP", Map.of("consentText", "Đồng ý")).getField());
+    }
 }
