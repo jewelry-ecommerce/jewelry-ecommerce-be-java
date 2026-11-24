@@ -100,4 +100,44 @@ class ProductResponseContractTest {
         assertEquals("/sku7.jpg", variants.get(0).get("image").asText());
         assertEquals("/chung.jpg", variants.get(1).get("image").asText());
     }
+
+    @Test
+    void metalColorShowsOnCardAndPdpEvenWhenSingleValue() {
+        ProductResponseDto dto = product();
+        for (ProductSkuResponseDto sku : dto.getSkus()) {
+            sku.setMetalColorLabel("Bạc");
+            sku.setSizeLabel(sku.getId() == 7L ? "8" : "10");
+            sku.setAttributeBindings(List.of(java.util.Map.of(
+                    "id", "2",
+                    "code", "JEW_METAL_COLOR",
+                    "name", "Màu sắc",
+                    "type", "SELECT",
+                    "displayType", "IMAGE",
+                    "value", "Bạc",
+                    "values", List.of("Bạc"),
+                    "imageUrl", "https://cdn.example/mau-bac.webp")));
+        }
+
+        JsonNode json = mapper.valueToTree(dto);
+        JsonNode visualSwitch = json.get("visualSwitch");
+        assertEquals("metal_color", visualSwitch.get("attributeCode").asText());
+        assertEquals("Màu sắc", visualSwitch.get("label").asText());
+        assertEquals("IMAGE", visualSwitch.get("displayType").asText());
+        assertEquals(1, visualSwitch.get("options").size());
+        assertEquals("Bạc", visualSwitch.get("options").get(0).get("label").asText());
+        assertEquals("https://cdn.example/mau-bac.webp", visualSwitch.get("options").get(0).get("swatchImage").asText());
+
+        JsonNode selectors = json.get("variantSelectors");
+        assertTrue(selectors.size() >= 2, "expect color + size selectors");
+        JsonNode color = null;
+        for (JsonNode selector : selectors) {
+            if ("metal_color".equals(selector.get("attribute").get("code").asText())) {
+                color = selector;
+            }
+        }
+        assertTrue(color != null, "metal_color selector must be present");
+        assertEquals("IMAGE", color.get("attribute").get("displayType").asText());
+        assertEquals("Bạc", color.get("options").get(0).get("value").asText());
+        assertEquals("https://cdn.example/mau-bac.webp", color.get("options").get(0).get("thumbnail").asText());
+    }
 }
