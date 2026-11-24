@@ -208,9 +208,57 @@ public class ProductResponseDto extends BaseDto {
         return m;
     }
 
+    /**
+     * Swatch màu trên product card / carousel.
+     * Luôn trả khi có metalColorLabel (kể cả 1 màu) để FE hiện value + ảnh swatch.
+     */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public Object getVisualSwitch() {
-        return null;
+        if (skus == null || skus.isEmpty()) {
+            return null;
+        }
+        ProductSkuResponseDto selected = defaultSku();
+        LinkedHashMap<String, Map<String, Object>> optionsByColor = new LinkedHashMap<>();
+        for (ProductSkuResponseDto sku : skus) {
+            String color = valueByKey(sku, METAL_COLOR_CODE);
+            if (color == null || optionsByColor.containsKey(color)) {
+                continue;
+            }
+            String swatch = colorImageOf(sku);
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("valueCode", color);
+            option.put("label", color);
+            option.put("selected", selected != null && color.equals(valueByKey(selected, METAL_COLOR_CODE)));
+            option.put("swatchImage", swatch);
+            option.put("thumbnail", swatch == null ? "" : swatch);
+            option.put("image", imageForSku(sku.getId()));
+            option.put("stockStatus", feStockStatus(sku));
+            option.put("variationId", String.valueOf(sku.getId()));
+            option.put("previewVariationId", String.valueOf(sku.getId()));
+            option.put("customerDisplayPrice", displayPrice(sku));
+            option.put("sku", selectedSkuPayload(sku));
+            optionsByColor.put(color, option);
+        }
+        if (optionsByColor.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> visualSwitch = new LinkedHashMap<>();
+        visualSwitch.put("displayType", metalColorDisplayType());
+        visualSwitch.put("label", metalColorDisplayName());
+        visualSwitch.put("attributeCode", METAL_COLOR_CODE);
+        visualSwitch.put("options", new ArrayList<>(optionsByColor.values()));
+        return visualSwitch;
+    }
+
+    private Map<String, Object> selectedSkuPayload(ProductSkuResponseDto sku) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("id", String.valueOf(sku.getId()));
+        payload.put("skuCode", sku.getSkuCode());
+        payload.put("image", imageForSku(sku.getId()));
+        payload.put("imageHover", imageForSku(sku.getId()));
+        payload.put("customerDisplayPrice", displayPrice(sku));
+        payload.put("stockStatus", feStockStatus(sku));
+        return payload;
     }
 
     public Map<String, Object> getAddToCart() {
@@ -407,7 +455,8 @@ public class ProductResponseDto extends BaseDto {
     }
 
     private static final String[][] ATTRS = {
-            {"size", "Kích cỡ"}, {"material", "Chất liệu"}, {"gemstone", "Đá chủ"}, {"metal_color", "Màu kim loại"}};
+            {"size", "Kích cỡ"}, {"material", "Chất liệu"}, {"gemstone", "Đá chủ"}, {"metal_color", "Màu sắc"}};
+    private static final String METAL_COLOR_CODE = "metal_color";
 
     /** Binding admin trùng cột built-in (sizeLabel / metalColorLabel) không tạo selector thứ hai. */
     private static boolean isAliasOfBuiltinAttr(String code) {
@@ -418,6 +467,82 @@ public class ProductResponseDto extends BaseDto {
         return "SIZE".equals(normalized) || "JEW_SIZE".equals(normalized)
                 || "METAL_COLOR".equals(normalized) || "JEW_METAL_COLOR".equals(normalized)
                 || "COLOR".equals(normalized) || "DEMO_COLOR".equals(normalized);
+    }
+
+    private static boolean isMetalColorBinding(String code) {
+        if (code == null || code.isBlank()) {
+            return false;
+        }
+        String normalized = code.trim().toUpperCase().replace('-', '_');
+        return "METAL_COLOR".equals(normalized) || "JEW_METAL_COLOR".equals(normalized)
+                || "COLOR".equals(normalized) || "DEMO_COLOR".equals(normalized);
+    }
+
+    private static Map<String, Object> colorBindingOf(ProductSkuResponseDto sku) {
+        if (sku.getAttributeBindings() == null) {
+            return null;
+        }
+        for (Map<String, Object> binding : sku.getAttributeBindings()) {
+            if (isMetalColorBinding(String.valueOf(binding.get("code")))) {
+                return binding;
+            }
+        }
+        return null;
+    }
+
+    private static String colorImageOf(ProductSkuResponseDto sku) {
+        Map<String, Object> binding = colorBindingOf(sku);
+        if (binding == null || binding.get("imageUrl") == null) {
+            return null;
+        }
+        String imageUrl = String.valueOf(binding.get("imageUrl")).trim();
+        return imageUrl.isEmpty() ? null : imageUrl;
+    }
+
+    private String metalColorDisplayName() {
+        if (skus != null) {
+            for (ProductSkuResponseDto sku : skus) {
+                Map<String, Object> binding = colorBindingOf(sku);
+                if (binding != null && binding.get("name") != null) {
+                    String name = String.valueOf(binding.get("name")).trim();
+                    if (!name.isEmpty()) {
+                        return name;
+                    }
+                }
+            }
+        }
+        return "Màu sắc";
+    }
+
+    private String metalColorDisplayType() {
+        if (skus != null) {
+            for (ProductSkuResponseDto sku : skus) {
+                Map<String, Object> binding = colorBindingOf(sku);
+                if (binding != null && binding.get("displayType") != null) {
+                    String displayType = String.valueOf(binding.get("displayType")).trim();
+                    if (!displayType.isEmpty()) {
+                        return displayType;
+                    }
+                }
+            }
+        }
+        return "TEXT";
+    }
+
+    private String firstImageForMetalColor(String value) {
+        if (skus == null || value == null) {
+            return null;
+        }
+        for (ProductSkuResponseDto sku : skus) {
+            if (!value.equals(valueByKey(sku, METAL_COLOR_CODE))) {
+                continue;
+            }
+            String imageUrl = colorImageOf(sku);
+            if (imageUrl != null) {
+                return imageUrl;
+            }
+        }
+        return null;
     }
 
     private static String attrValue(ProductSkuResponseDto s, int idx) {
@@ -459,12 +584,26 @@ public class ProductResponseDto extends BaseDto {
             if (val == null) {
                 continue;
             }
+            Map<String, Object> attribute = attributeDef(i);
+            String image = null;
+            if (METAL_COLOR_CODE.equals(ATTRS[i][0])) {
+                Map<String, Object> colorBinding = colorBindingOf(s);
+                if (colorBinding != null) {
+                    if (colorBinding.get("name") != null) {
+                        attribute.put("name", colorBinding.get("name"));
+                    }
+                    if (colorBinding.get("displayType") != null) {
+                        attribute.put("displayType", colorBinding.get("displayType"));
+                    }
+                }
+                image = colorImageOf(s);
+            }
             Map<String, Object> av = new LinkedHashMap<>();
             av.put("id", ATTRS[i][0] + ":" + val);
             av.put("code", val);
             av.put("value", val);
-            av.put("image", null);
-            av.put("attribute", attributeDef(i));
+            av.put("image", image);
+            av.put("attribute", attribute);
             values.add(av);
             flat.put(ATTRS[i][0], val);
         }
@@ -544,10 +683,14 @@ public class ProductResponseDto extends BaseDto {
         return null;
     }
 
-    /** Bộ chọn biến thể: chỉ thuộc tính có từ 2 giá trị khác nhau trở lên mới cần chọn (gồm cả thuộc tính admin gán cho SKU). */
+    /**
+     * Bộ chọn biến thể.
+     * Size/material/... chỉ hiện khi ≥2 giá trị.
+     * Màu sắc luôn hiện (kể cả 1 màu) để PDP/card thấy value + swatch IMAGE.
+     */
     public List<Map<String, Object>> getVariantSelectors() {
         List<Map<String, Object>> selectors = new ArrayList<>();
-        if (skus == null || skus.size() < 2) {
+        if (skus == null || skus.isEmpty()) {
             return selectors;
         }
         ProductSkuResponseDto def = defaultSku();
@@ -562,7 +705,11 @@ public class ProductResponseDto extends BaseDto {
                     distinct.add(val);
                 }
             }
-            if (distinct.size() < 2) {
+            boolean alwaysShowMetalColor = METAL_COLOR_CODE.equals(code);
+            if (distinct.isEmpty() || (distinct.size() < 2 && !alwaysShowMetalColor)) {
+                continue;
+            }
+            if (!alwaysShowMetalColor && skus.size() < 2) {
                 continue;
             }
             String selected = def == null ? null : valueByKey(def, code);
@@ -581,7 +728,7 @@ public class ProductResponseDto extends BaseDto {
                 o.put("code", val);
                 o.put("label", val);
                 o.put("value", val);
-                o.put("thumbnail", null);
+                o.put("thumbnail", alwaysShowMetalColor ? firstImageForMetalColor(val) : null);
                 o.put("selected", val.equals(selected));
                 o.put("available", available);
                 o.put("variationIds", ids);
@@ -589,10 +736,10 @@ public class ProductResponseDto extends BaseDto {
             }
             Map<String, Object> attrDef = new LinkedHashMap<>();
             attrDef.put("id", key[2] != null ? key[2] : code);
-            attrDef.put("name", key[1]);
+            attrDef.put("name", alwaysShowMetalColor ? metalColorDisplayName() : key[1]);
             attrDef.put("code", code);
             attrDef.put("index", i);
-            attrDef.put("displayType", "TEXT");
+            attrDef.put("displayType", alwaysShowMetalColor ? metalColorDisplayType() : "TEXT");
             Map<String, Object> sel = new LinkedHashMap<>();
             sel.put("attribute", attrDef);
             sel.put("options", options);
