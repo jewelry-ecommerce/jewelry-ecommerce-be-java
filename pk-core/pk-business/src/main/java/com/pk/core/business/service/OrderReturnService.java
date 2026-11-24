@@ -29,4 +29,13 @@ public interface OrderReturnService {
     Map<String, Object> approve(String idOrCode, String note, OrderOmsService.Actor actor);
 
     Map<String, Object> reject(String idOrCode, String note, OrderOmsService.Actor actor);
+
+    /** Khách đăng nhập tạo yêu cầu đổi/trả cho đơn của mình. */
+    Map<String, Object> createForCustomer(OmsRequestDtos.OrderReturn req, Long customerId);
+
+    /** Khách xem chi tiết yêu cầu của mình (theo id hoặc mã RT...). */
+    Map<String, Object> detailForCustomer(String idOrCode, Long customerId);
+
+    /** Khách huỷ yêu cầu Pending của mình. */
+    Map<String, Object> cancelForCustomer(String idOrCode, Long customerId);
 }

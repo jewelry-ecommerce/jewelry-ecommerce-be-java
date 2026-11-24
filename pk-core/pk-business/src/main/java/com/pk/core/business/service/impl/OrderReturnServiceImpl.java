@@ -526,6 +526,7 @@ public class OrderReturnServiceImpl implements OrderReturnService {
         m.put("updatedAt", PromoJson.iso(r.getUpdatedDate() != null ? r.getUpdatedDate() : r.getCreatedDate()));
         m.put("tenantCode", "default");
         m.put("returnCode", r.getCode());
+        m.put("orderReturnCode", r.getCode());
         m.put("originalOrderId", String.valueOf(r.getOrderId()));
         m.put("originalOrderCode", o == null ? null : o.getCode());
         m.put("orderId", String.valueOf(r.getOrderId()));
@@ -937,5 +938,56 @@ public class OrderReturnServiceImpl implements OrderReturnService {
         oms.audit(r.getOrderId(), "oms", "RETURN_REJECTED", "RETURN", "Từ chối yêu cầu đổi trả " + r.getCode(),
                 note.trim(), actor, List.of(change("status", PENDING, REJECTED)));
         return detailMap(r);
+    }
+
+    @Transactional
+    @Override
+    public Map<String, Object> createForCustomer(OmsRequestDtos.OrderReturn req, Long customerId) {
+        if (customerId == null) {
+            throw bad("Cần đăng nhập để tạo yêu cầu đổi trả");
+        }
+        if (req == null || req.getOrderId() == null || req.getOrderId().isBlank()) {
+            throw bad("Thiếu mã đơn hàng");
+        }
+        OrderEntity order = findOrder(req.getOrderId());
+        if (order.getUserId() == null || !customerId.equals(order.getUserId())) {
+            throw BusinessException.forbidden(ErrorCode.FORBIDDEN, "Bạn không thể tạo đổi trả cho đơn này");
+        }
+        if (!OrderEntity.DELIVERED.equals(order.getStatus())) {
+            throw bad("Chỉ đơn đã giao mới được yêu cầu đổi trả");
+        }
+        OrderOmsService.Actor actor = new OrderOmsService.Actor(customerId, "CUSTOMER");
+        Map<String, Object> created = create(req, actor);
+        created.put("orderReturnCode", created.get("returnCode"));
+        return created;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Object> detailForCustomer(String idOrCode, Long customerId) {
+        OrderReturnEntity r = find(idOrCode);
+        assertCustomerOwns(r, customerId);
+        return detailMap(r);
+    }
+
+    @Transactional
+    @Override
+    public Map<String, Object> cancelForCustomer(String idOrCode, Long customerId) {
+        OrderReturnEntity r = find(idOrCode);
+        assertCustomerOwns(r, customerId);
+        OmsRequestDtos.OrderReturn req = new OmsRequestDtos.OrderReturn();
+        req.setStatus(CANCELLED);
+        req.setNote("Khách huỷ yêu cầu đổi trả");
+        return update(idOrCode, req, new OrderOmsService.Actor(customerId, "CUSTOMER"));
+    }
+
+    private void assertCustomerOwns(OrderReturnEntity r, Long customerId) {
+        if (customerId == null) {
+            throw bad("Cần đăng nhập");
+        }
+        OrderEntity order = orders.findOne(r.getOrderId());
+        if (order == null || order.getUserId() == null || !customerId.equals(order.getUserId())) {
+            throw BusinessException.forbidden(ErrorCode.FORBIDDEN, "Bạn không có quyền với yêu cầu đổi trả này");
+        }
     }
 }
