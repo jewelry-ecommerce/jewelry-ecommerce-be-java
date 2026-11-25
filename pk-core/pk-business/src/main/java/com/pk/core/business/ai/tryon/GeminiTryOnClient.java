@@ -169,13 +169,15 @@ public class GeminiTryOnClient {
         try {
             String json = mapper.writeValueAsString(body);
             Duration timeout = properties.getTryOnTimeout() == null ? Duration.ofSeconds(90) : properties.getTryOnTimeout();
-            HttpRequest.Builder builder = HttpRequest.newBuilder(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
+            // Chỉ x-goog-api-key. Đừng gửi Authorization: Bearer API key —
+            // Google coi Bearer là OAuth → HTTP 401 (chat Completions mới dùng Bearer).
+            HttpRequest request = HttpRequest.newBuilder(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
                     .timeout(timeout)
                     .header("Content-Type", "application/json")
                     .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
-                    .header("Authorization", "Bearer " + properties.getApiKey())
-                    .POST(HttpRequest.BodyPublishers.ofString(json));
-            HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 log.warn("try-on generate HTTP {} {}", response.statusCode(), briefBody(response.body()));
                 throw new IllegalStateException("generateContent HTTP " + response.statusCode());

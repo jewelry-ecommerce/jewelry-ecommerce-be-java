@@ -5,7 +5,8 @@ import java.net.URI;
 /**
  * URL {@code generateContent} giữ nguyên dấu hai chấm trong path.
  * UriBuilder mã hóa {@code :} thành {@code %3A} và Google trả 404.
- * Auth qua header {@code x-goog-api-key} — không nhét key vào query (tránh encode lỗi).
+ * Auth qua header {@code x-goog-api-key} only.
+ * Không dùng {@code Authorization: Bearer} với API key — endpoint này hiểu Bearer là OAuth → 401.
  */
 public final class GeminiGenerateEndpoint {
 
