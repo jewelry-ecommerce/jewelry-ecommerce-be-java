@@ -78,7 +78,7 @@ public class AiTryOnServiceImpl implements AiTryOnService {
         List<TryOnCatalogPicker.Picked> picks = TryOnCatalogPicker.pick(
                 catalog, analysis.regions(), analysis.styles(), properties.getTryOnMaxVariants());
         if (picks.isEmpty()) {
-            return TryOnResponseDto.fail("Catalog chưa có sản phẩm phù hợp với vùng nhận diện");
+            return TryOnResponseDto.fail(catalogMissMessage(analysis.regions()), analysis.regions());
         }
         AtomicReference<String> generateError = new AtomicReference<>();
         List<TryOnVariantResponseDto> variants = generateAll(userBytes, userMime, picks, generateError);
@@ -163,6 +163,14 @@ public class AiTryOnServiceImpl implements AiTryOnService {
                 && bytes[1] == 0x50
                 && bytes[2] == 0x4E
                 && bytes[3] == 0x47;
+    }
+
+    private static String catalogMissMessage(List<String> regions) {
+        if (regions == null || regions.isEmpty()) {
+            return "Catalog chưa có sản phẩm phù hợp với vùng nhận diện";
+        }
+        return "Catalog chưa có sản phẩm phù hợp với vùng: " + String.join(", ", regions)
+                + ". Thử ảnh tay/cổ tay hoặc thêm SP danh mục tương ứng (nhẫn/lắc/dây/bông tai).";
     }
 
     private String validateImage(MultipartFile image) {
