@@ -101,7 +101,11 @@ public class SecurityConfig {
                         // danh mục/nội dung; ORDER_MANAGER chỉ nhóm đơn hàng/kho/khách. Quản lý tài khoản, vai trò
                         // và cấu hình đặt trước chỉ ADMIN. Rule cụ thể đặt TRƯỚC rule chung "/admin/**".
                         .requestMatchers(v1(UrlAdminConstant.Common.BASE + "/auth/**"))
-                        .hasAnyRole("ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER")
+                        .hasAnyRole("ROOT", "ADMIN", "CATALOG_MANAGER", "ORDER_MANAGER")
+                        // Matrix phân quyền trang: chỉ ROOT.
+                        .requestMatchers(v1(UrlAdminConstant.Access.PERMISSION_PAGES),
+                                v1(UrlAdminConstant.Access.USERS + "/*/page-permissions"))
+                        .hasRole("ROOT")
                         .requestMatchers(v1(UrlAdminConstant.Common.BASE + "/catalog/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/promotions/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/vouchers/**"),
@@ -110,15 +114,15 @@ public class SecurityConfig {
                                 v1(UrlAdminConstant.Common.BASE + "/banner/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/badge-templates/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/badge-flow/**"))
-                        .hasAnyRole("ADMIN", "CATALOG_MANAGER")
+                        .hasAnyRole("ROOT", "ADMIN", "CATALOG_MANAGER")
                         .requestMatchers(v1(UrlAdminConstant.Common.BASE + "/orders/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/order-returns/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/dashboard/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/inventory/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/customers/**"),
                                 v1(UrlAdminConstant.Common.BASE + "/customer-request/**"))
-                        .hasAnyRole("ADMIN", "ORDER_MANAGER")
-                        .requestMatchers(v1(UrlAdminConstant.Common.BASE + "/**")).hasRole("ADMIN")
+                        .hasAnyRole("ROOT", "ADMIN", "ORDER_MANAGER")
+                        .requestMatchers(v1(UrlAdminConstant.Common.BASE + "/**")).hasAnyRole("ROOT", "ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))

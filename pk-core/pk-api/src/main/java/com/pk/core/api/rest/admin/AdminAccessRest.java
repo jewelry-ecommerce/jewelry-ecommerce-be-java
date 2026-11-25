@@ -11,6 +11,7 @@ import com.pk.core.identity.security.model.SecurityUser;
 import com.pk.core.identity.service.AdminUserService;
 import com.pk.core.model.constant.admin.UrlAdminConstant;
 import com.pk.core.model.dto.request.AdminUserCreateRequestDto;
+import com.pk.core.model.dto.request.AdminUserPagePermissionsRequestDto;
 import com.pk.core.model.dto.request.AdminUserRolesRequestDto;
 import com.pk.core.model.dto.request.AdminUserUpdateRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
@@ -89,6 +90,37 @@ public class AdminAccessRest extends AbstractRest {
                                 HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(adminUserService.assignRoles(principal.getId(), id, request));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @GetMapping(UrlAdminConstant.Access.PERMISSION_PAGES)
+    public BaseRes permissionPages(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(accessService.listPermissionPages());
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @GetMapping(UrlAdminConstant.Access.USERS + "/{id}/page-permissions")
+    public BaseRes getPagePermissions(@PathVariable Long id,
+                                       HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(accessService.getUserPagePermissions(id));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PutMapping(UrlAdminConstant.Access.USERS + "/{id}/page-permissions")
+    public BaseRes putPagePermissions(@AuthenticationPrincipal SecurityUser principal, @PathVariable Long id,
+                                       @Valid @RequestBody AdminUserPagePermissionsRequestDto request,
+                                       HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(
+                    accessService.replaceUserPagePermissions(principal.getId(), id, request));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

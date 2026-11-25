@@ -21,10 +21,20 @@ public class UserResponseDto extends BaseDto {
     private String fullName;
     private String phone;
     private List<String> roles;
+    /** true khi user có role ROOT — bypass mọi page grant. */
+    private boolean root;
+    /** Grant trang (rỗng nếu ROOT). */
+    private List<PagePermissionItemDto> pagePermissions;
 
     public static UserResponseDto from(UserEntity u) {
+        return from(u, List.of());
+    }
+
+    public static UserResponseDto from(UserEntity u, List<PagePermissionItemDto> pagePermissions) {
+        List<String> roleNames = u.getRoles().stream().map(RoleEntity::getName).sorted().toList();
+        boolean root = roleNames.contains(RoleEntity.ROOT);
         return BaseDto.of(new UserResponseDto(u.getId(), u.getEmail(), u.getFullName(), u.getPhone(),
-                u.getRoles().stream().map(RoleEntity::getName).sorted().toList()), u);
+                roleNames, root, root ? List.of() : pagePermissions), u);
     }
 
     // ---- FE AuthUser: field tính toán, giữ nguyên field cũ ----

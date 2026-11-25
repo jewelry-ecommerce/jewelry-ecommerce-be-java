@@ -108,6 +108,9 @@ public static final String ORDER_NOTES = "order_notes";
     public static final String AI_STYLIST_SESSION_ITEMS = "ai_stylist_session_items";
     public static final String AI_STYLIST_FEEDBACK = "ai_stylist_feedback";
 
+    // Phân quyền trang theo user (V43)
+    public static final String USER_PAGE_PERMISSIONS = "user_page_permissions";
+
     private TableConstant() {
     }
 }

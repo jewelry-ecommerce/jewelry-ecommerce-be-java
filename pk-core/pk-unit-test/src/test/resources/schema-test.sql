@@ -1220,3 +1220,17 @@ CREATE TABLE ai_stylist_feedback (
     created_date TIMESTAMP NOT NULL,
     updated_date TIMESTAMP
 );
+
+CREATE TABLE user_page_permissions (
+    id            BIGINT PRIMARY KEY,
+    user_id       BIGINT NOT NULL,
+    page_code     VARCHAR(80) NOT NULL,
+    can_view      BOOLEAN NOT NULL DEFAULT FALSE,
+    can_edit      BOOLEAN NOT NULL DEFAULT FALSE,
+    can_delete    BOOLEAN NOT NULL DEFAULT FALSE,
+    created_id    BIGINT,
+    created_date  TIMESTAMP NOT NULL,
+    updated_id    BIGINT,
+    updated_date  TIMESTAMP
+);
+CREATE UNIQUE INDEX uq_user_page_permissions_user_page ON user_page_permissions (user_id, page_code);
