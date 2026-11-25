@@ -181,5 +181,7 @@ public class UrlAdminConstant {
     public static class Access {
         public final String USERS = Common.BASE + "/users";
         public final String ROLES = Common.BASE + "/roles";
+        /** Catalog trang cố định cho matrix phân quyền (ROOT). */
+        public final String PERMISSION_PAGES = Common.BASE + "/permission-pages";
     }
 }

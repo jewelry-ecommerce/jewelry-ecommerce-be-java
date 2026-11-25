@@ -11,6 +11,7 @@ import com.pk.core.identity.security.jwt.JwtProvider;
 import com.pk.core.model.entity.RoleEntity;
 import com.pk.core.business.repository.RoleRepo;
 import com.pk.core.model.entity.UserEntity;
+import com.pk.core.business.repository.UserPagePermissionRepo;
 import com.pk.core.business.repository.UserRepo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,10 +21,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,6 +38,7 @@ class AuthServiceTest {
 
     @Mock UserRepo users;
     @Mock RoleRepo roles;
+    @Mock UserPagePermissionRepo pagePermissions;
     @Mock PasswordEncoder encoder;
     @Mock JwtProvider jwtProvider;
     @Mock RefreshTokenService refreshTokens;
@@ -41,7 +47,8 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthServiceImpl(users, roles, encoder, jwtProvider, refreshTokens);
+        service = new AuthServiceImpl(users, roles, pagePermissions, encoder, jwtProvider, refreshTokens);
+        lenient().when(pagePermissions.findByUserId(nullable(Long.class))).thenReturn(List.of());
     }
 
     private UserEntity user(boolean enabled) {

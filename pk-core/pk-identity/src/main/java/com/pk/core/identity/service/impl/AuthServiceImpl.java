@@ -12,17 +12,20 @@ import com.pk.core.common.util.PhoneUtil;
 import com.pk.core.model.dto.request.LoginRequestDto;
 import com.pk.core.model.dto.request.RegisterRequestDto;
 import com.pk.core.model.dto.request.UpdateProfileRequestDto;
+import com.pk.core.model.dto.response.PagePermissionItemDto;
 import com.pk.core.model.dto.response.TokenResponseDto;
 import com.pk.core.model.dto.response.UserResponseDto;
 import com.pk.core.identity.security.jwt.JwtProvider;
 import com.pk.core.model.entity.RoleEntity;
 import com.pk.core.business.repository.RoleRepo;
 import com.pk.core.model.entity.UserEntity;
+import com.pk.core.business.repository.UserPagePermissionRepo;
 import com.pk.core.business.repository.UserRepo;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -31,6 +34,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepo users;
     private final RoleRepo roles;
+    private final UserPagePermissionRepo pagePermissions;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final RefreshTokenService refreshTokens;
@@ -113,7 +117,7 @@ public class AuthServiceImpl implements AuthService {
         if (user == null) {
             throw new ResourceNotFoundException("Người dùng", "User", userId);
         }
-        return UserResponseDto.from(user);
+        return toUserDto(user);
     }
 
     @Transactional
@@ -132,12 +136,19 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(email);
         user.touch();
         users.update(user);
-        return UserResponseDto.from(user);
+        return toUserDto(user);
     }
 
     private TokenResponseDto tokensFor(UserEntity user, String refreshToken) {
         JwtProvider.AccessToken at = jwtProvider.issueAccessToken(user);
-        return TokenResponseDto.bearer(at.token(), refreshToken, at.expiresInSeconds(), UserResponseDto.from(user));
+        return TokenResponseDto.bearer(at.token(), refreshToken, at.expiresInSeconds(), toUserDto(user));
+    }
+
+    private UserResponseDto toUserDto(UserEntity user) {
+        List<PagePermissionItemDto> grants = pagePermissions.findByUserId(user.getId()).stream()
+                .map(PagePermissionItemDto::from)
+                .toList();
+        return UserResponseDto.from(user, grants);
     }
 
     /** Role thường đã có từ migration V1; tạo lại nếu thiếu (vd. DB test rỗng). */
