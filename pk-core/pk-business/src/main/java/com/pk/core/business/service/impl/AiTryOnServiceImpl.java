@@ -80,7 +80,7 @@ public class AiTryOnServiceImpl implements AiTryOnService {
         }
         List<TryOnVariantResponseDto> variants = generateAll(userBytes, userMime, picks);
         if (variants.isEmpty()) {
-            return TryOnResponseDto.fail("Không tạo được ảnh minh họa, thử lại sau");
+            return TryOnResponseDto.fail("Không tạo được ảnh đeo thử (ghép trang sức lên ảnh của bạn), thử lại sau");
         }
         return TryOnResponseDto.success(analysis.regions(), variants);
     }
@@ -110,10 +110,8 @@ public class AiTryOnServiceImpl implements AiTryOnService {
     private TryOnVariantResponseDto oneVariant(byte[] userBytes, String userMime,
                                                TryOnCatalogPicker.Picked pick) {
         AiCandidate product = pick.product();
+        // Không fallback thumbnail catalog — try-on phải là ảnh ghép AI trên ảnh khách.
         String tryOnUrl = generateAndStore(userBytes, userMime, pick);
-        if (tryOnUrl == null) {
-            tryOnUrl = product.thumbnailUrl();
-        }
         if (tryOnUrl == null || tryOnUrl.isBlank()) {
             return null;
         }
@@ -132,22 +130,30 @@ public class AiTryOnServiceImpl implements AiTryOnService {
 
     private String generateAndStore(byte[] userBytes, String userMime, TryOnCatalogPicker.Picked pick) {
         TryOnImageFetcher.Fetched productImage = imageFetcher.fetch(pick.product().thumbnailUrl());
-        if (productImage == null) {
-            return null;
-        }
+        byte[] productBytes = productImage == null ? null : productImage.bytes();
+        String productMime = productImage == null ? null : productImage.mimeType();
         byte[] generated = gemini.generateLookalike(
                 userBytes, userMime,
-                productImage.bytes(), productImage.mimeType(),
+                productBytes, productMime,
                 pick.product().name(), pick.style(), pick.region());
         if (generated == null || generated.length == 0) {
             return null;
         }
         try {
-            String key = uploadStorage.save(UploadStorage.Folder.IMAGES, "png", generated);
+            String ext = looksLikePng(generated) ? "png" : "jpg";
+            String key = uploadStorage.save(UploadStorage.Folder.IMAGES, ext, generated);
             return uploadStorage.publicUrl(key);
         } catch (IOException ex) {
             return null;
         }
+    }
+
+    private static boolean looksLikePng(byte[] bytes) {
+        return bytes.length >= 4
+                && bytes[0] == (byte) 0x89
+                && bytes[1] == 0x50
+                && bytes[2] == 0x4E
+                && bytes[3] == 0x47;
     }
 
     private String validateImage(MultipartFile image) {
