@@ -56,7 +56,8 @@ public class GeminiAiRankingProvider implements AiRankingProvider {
     private AiRankingResult invoke(StylistRequestDto request, List<AiCandidate> candidates, boolean setMode) {
         try {
             String raw = client.post()
-                    .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), properties.rankingModel(), properties.getApiKey()))
+                    .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), properties.rankingModel()))
+                    .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body(request, candidates, setMode))
                     .retrieve()
@@ -73,8 +74,9 @@ public class GeminiAiRankingProvider implements AiRankingProvider {
         content.put("role", "user");
         content.put("parts", List.of(part));
         Map<String, Object> generation = new LinkedHashMap<>();
-        generation.put("maxOutputTokens", properties.getMaxOutputTokens());
+        generation.put("maxOutputTokens", Math.max(2048, properties.getMaxOutputTokens()));
         generation.put("responseMimeType", "application/json");
+        generation.put("thinkingConfig", Map.of("thinkingLevel", "MINIMAL"));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("contents", List.of(content));
         payload.put("generationConfig", generation);

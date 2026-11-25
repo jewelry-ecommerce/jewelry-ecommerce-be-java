@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pk.core.business.ai.AiProperties;
 import com.pk.core.business.ai.GeminiGenerateEndpoint;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.ArrayList;
 import java.util.Base64;
@@ -18,8 +20,11 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 /** Gọi Gemini vision (phân vùng) và model image (lookalike try-on). */
+@Slf4j
 @Component
 public class GeminiTryOnClient {
+
+    private static final int ANALYZE_MAX_OUTPUT_TOKENS = 4096;
 
     private final AiProperties properties;
     private final RestClient client;
@@ -43,7 +48,11 @@ public class GeminiTryOnClient {
         try {
             String raw = post(properties.tryOnVisionModel(), analyzeBody(imageBytes, mimeType, styleHint));
             return parseAnalysis(raw);
+        } catch (RestClientResponseException ex) {
+            log.warn("try-on analyze HTTP {} {}", ex.getStatusCode().value(), briefBody(ex.getResponseBodyAsString()));
+            return new TryOnAnalysis(List.of(), List.of(), "Không phân tích được ảnh, thử lại sau");
         } catch (RuntimeException ex) {
+            log.warn("try-on analyze failed: {}", ex.toString());
             return new TryOnAnalysis(List.of(), List.of(), "Không phân tích được ảnh, thử lại sau");
         } finally {
             semaphore.release();
@@ -61,7 +70,11 @@ public class GeminiTryOnClient {
             String raw = post(properties.tryOnImageModelName(),
                     generateBody(userImage, userMime, productImage, productMime, productName, style, region));
             return firstImageBytes(raw);
+        } catch (RestClientResponseException ex) {
+            log.warn("try-on generate HTTP {} {}", ex.getStatusCode().value(), briefBody(ex.getResponseBodyAsString()));
+            return null;
         } catch (RuntimeException ex) {
+            log.warn("try-on generate failed: {}", ex.toString());
             return null;
         } finally {
             semaphore.release();
@@ -70,7 +83,8 @@ public class GeminiTryOnClient {
 
     private String post(String model, Map<String, Object> body) {
         return client.post()
-                .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model, properties.getApiKey()))
+                .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
+                .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
@@ -107,7 +121,9 @@ public class GeminiTryOnClient {
         if (jsonMime) {
             Map<String, Object> generation = new LinkedHashMap<>();
             generation.put("responseMimeType", "application/json");
-            generation.put("maxOutputTokens", 512);
+            // Gemini 3: thinking tokens nằm trong maxOutputTokens — 512 dễ MAX_TOKENS trống.
+            generation.put("maxOutputTokens", ANALYZE_MAX_OUTPUT_TOKENS);
+            generation.put("thinkingConfig", Map.of("thinkingLevel", "MINIMAL"));
             payload.put("generationConfig", generation);
         }
         return payload;
@@ -198,11 +214,23 @@ public class GeminiTryOnClient {
             return null;
         }
         for (JsonNode part : parts) {
+            // Bỏ thought summary — chỉ lấy phần trả lời.
+            if (part.path("thought").asBoolean(false)) {
+                continue;
+            }
             if (part.has("text")) {
                 return part.get("text").asText();
             }
         }
         return null;
+    }
+
+    private static String briefBody(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        String oneLine = body.replaceAll("\\s+", " ").trim();
+        return oneLine.length() <= 200 ? oneLine : oneLine.substring(0, 200);
     }
 
     private static String unwrap(String text) {
