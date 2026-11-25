@@ -11,7 +11,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -21,8 +26,8 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 /**
- * Vision analyze qua Chat Completions (cùng đường chat đang chạy trên Render).
- * Lookalike image vẫn dùng {@code generateContent} + fallback thumbnail nếu fail.
+ * Vision analyze qua Chat Completions (đường chat đang chạy trên Render).
+ * Lookalike: {@code generateContent} image model qua HttpClient thuần (tránh RestClient+baseUrl).
  */
 @Slf4j
 @Component
@@ -34,6 +39,7 @@ public class GeminiTryOnClient {
     private final RestClient client;
     private final Semaphore semaphore;
     private final ObjectMapper mapper;
+    private final HttpClient http;
 
     public GeminiTryOnClient(AiProperties properties,
                              @Qualifier("tryOnRestClient") RestClient client,
@@ -43,6 +49,8 @@ public class GeminiTryOnClient {
         this.client = client;
         this.semaphore = semaphore;
         this.mapper = mapper;
+        Duration timeout = properties.getTryOnTimeout() == null ? Duration.ofSeconds(90) : properties.getTryOnTimeout();
+        this.http = HttpClient.newBuilder().connectTimeout(timeout).build();
     }
 
     public TryOnAnalysis analyze(byte[] imageBytes, String mimeType, String styleHint) {
@@ -64,7 +72,7 @@ public class GeminiTryOnClient {
         }
     }
 
-    /** Trả PNG bytes; null nếu model không sinh ảnh. */
+    /** Trả bytes ảnh lookalike (thường PNG/JPEG); null nếu model không sinh ảnh. */
     public byte[] generateLookalike(byte[] userImage, String userMime,
                                     byte[] productImage, String productMime,
                                     String productName, String style, String region) {
@@ -72,12 +80,13 @@ public class GeminiTryOnClient {
             return null;
         }
         try {
-            String raw = post(properties.tryOnImageModelName(),
+            String raw = postGenerateContent(properties.tryOnImageModelName(),
                     generateBody(userImage, userMime, productImage, productMime, productName, style, region));
-            return firstImageBytes(raw);
-        } catch (RestClientResponseException ex) {
-            log.warn("try-on generate HTTP {} {}", ex.getStatusCode().value(), briefBody(ex.getResponseBodyAsString()));
-            return null;
+            byte[] image = firstImageBytes(raw);
+            if (image == null || image.length == 0) {
+                log.warn("try-on generate: response has no inline image data");
+            }
+            return image;
         } catch (RuntimeException ex) {
             log.warn("try-on generate failed: {}", ex.toString());
             return null;
@@ -129,14 +138,28 @@ public class GeminiTryOnClient {
         return URI.create(base + "/chat/completions");
     }
 
-    private String post(String model, Map<String, Object> body) {
-        return client.post()
-                .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
-                .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(String.class);
+    private String postGenerateContent(String model, Map<String, Object> body) {
+        try {
+            String json = mapper.writeValueAsString(body);
+            Duration timeout = properties.getTryOnTimeout() == null ? Duration.ofSeconds(90) : properties.getTryOnTimeout();
+            HttpRequest.Builder builder = HttpRequest.newBuilder(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
+                    .timeout(timeout)
+                    .header("Content-Type", "application/json")
+                    .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
+                    .header("Authorization", "Bearer " + properties.getApiKey())
+                    .POST(HttpRequest.BodyPublishers.ofString(json));
+            HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("try-on generate HTTP {} {}", response.statusCode(), briefBody(response.body()));
+                throw new IllegalStateException("generateContent HTTP " + response.statusCode());
+            }
+            return response.body();
+        } catch (IOException ex) {
+            throw new IllegalStateException("generateContent IO failure", ex);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("generateContent interrupted", ex);
+        }
     }
 
     private Map<String, Object> generateBody(byte[] userImage, String userMime,
@@ -145,13 +168,16 @@ public class GeminiTryOnClient {
         List<Map<String, Object>> parts = new ArrayList<>();
         parts.add(Map.of("text", generatePrompt(productName, style, region)));
         parts.add(inlinePart(userMime, userImage));
-        parts.add(inlinePart(productMime, productImage));
+        if (productImage != null && productImage.length > 0) {
+            parts.add(inlinePart(productMime, productImage));
+        }
         Map<String, Object> content = new LinkedHashMap<>();
         content.put("role", "user");
         content.put("parts", parts);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("contents", List.of(content));
         Map<String, Object> generation = new LinkedHashMap<>();
+        // IMAGE bắt buộc để nhận ảnh ghép; TEXT optional.
         generation.put("responseModalities", List.of("TEXT", "IMAGE"));
         payload.put("generationConfig", generation);
         return payload;
@@ -178,10 +204,13 @@ public class GeminiTryOnClient {
     }
 
     private static String generatePrompt(String productName, String style, String region) {
-        return "Tạo ảnh minh họa try-on trang sức lookalike. Giữ nguyên tay/cảnh/ánh sáng ảnh người dùng (ảnh 1). "
-                + "Chỉ ghép món trang sức giống ảnh sản phẩm (ảnh 2) lên đúng vùng " + region + ". "
-                + "Phong cách: " + style + ". Tên SP tham chiếu: " + productName + ". "
-                + "Không thêm chữ watermark. Không thay đổi khuôn mặt nếu có.";
+        return "You are a jewelry virtual try-on editor. Output ONE photorealistic image. "
+                + "Image 1 is the customer's photo — keep the same person, pose, background, lighting, and camera angle. "
+                + "Composite a realistic jewelry piece onto the correct body region: " + region + ". "
+                + "If image 2 is provided, match that product's design closely; otherwise invent a tasteful "
+                + style + " piece named \"" + productName + "\". "
+                + "The jewelry must look worn on the body (not a floating product shot). "
+                + "No text, watermark, logo, or border.";
     }
 
     private TryOnAnalysis parseAnalysisText(String text) {
