@@ -99,8 +99,8 @@ public class AiProperties {
     /** Timeout analyze + gen ảnh (dài hơn ranking text). */
     private Duration tryOnTimeout = Duration.ofSeconds(90);
 
-    /** Số mẫu tối đa mỗi lần upload (2–3). */
-    private int tryOnMaxVariants = 3;
+    /** Số mẫu tối đa mỗi lần upload. Default 1 để tránh Gemini image 429 khi demo. */
+    private int tryOnMaxVariants = 1;
 
     /** Dung lượng ảnh upload tối đa (bytes). */
     private long tryOnMaxUploadBytes = 5_242_880L;

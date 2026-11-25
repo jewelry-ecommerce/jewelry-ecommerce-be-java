@@ -19,12 +19,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** Orchestrate try-on: validate → vision → pick catalog → gen song song (bounded). */
+/** Orchestrate try-on: validate → vision → pick catalog → gen lookalike tuần tự. */
 @Service
 public class AiTryOnServiceImpl implements AiTryOnService {
 
@@ -94,24 +91,15 @@ public class AiTryOnServiceImpl implements AiTryOnService {
     private List<TryOnVariantResponseDto> generateAll(byte[] userBytes, String userMime,
                                                      List<TryOnCatalogPicker.Picked> picks,
                                                      AtomicReference<String> generateError) {
-        ExecutorService pool = Executors.newFixedThreadPool(Math.min(3, picks.size()));
-        try {
-            List<CompletableFuture<TryOnVariantResponseDto>> futures = picks.stream()
-                    .map(pick -> CompletableFuture.supplyAsync(
-                            () -> oneVariant(userBytes, userMime, pick, generateError), pool))
-                    .toList();
-            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
-            List<TryOnVariantResponseDto> result = new ArrayList<>();
-            for (CompletableFuture<TryOnVariantResponseDto> future : futures) {
-                TryOnVariantResponseDto variant = future.join();
-                if (variant != null) {
-                    result.add(variant);
-                }
+        // Sequential — parallel image gen dễ dính 429 free-tier.
+        List<TryOnVariantResponseDto> result = new ArrayList<>();
+        for (TryOnCatalogPicker.Picked pick : picks) {
+            TryOnVariantResponseDto variant = oneVariant(userBytes, userMime, pick, generateError);
+            if (variant != null) {
+                result.add(variant);
             }
-            return result;
-        } finally {
-            pool.shutdown();
         }
+        return result;
     }
 
     private TryOnVariantResponseDto oneVariant(byte[] userBytes, String userMime,
