@@ -31,9 +31,11 @@ app:
   seed:
     enabled: ${SEED_ENABLED:false}
   otp:
-    # Chỉ để dev/demo (chưa tích hợp SMS): đặt OTP_FIXED_CODE=123456 để mọi OTP đều là mã đó; để trống = mã ngẫu nhiên
-    # ghi vào log (xem LogOtpSender). KHÔNG đặt ở môi trường thật.
+    # Dev: OTP_FIXED_CODE=123456 hoặc forward mail (OTP_FORWARD_EMAIL + RESEND_API_KEY). Không SMS.
     fixed-code: ${OTP_FIXED_CODE:}
+    forward-email: ${OTP_FORWARD_EMAIL:}
+    resend-api-key: ${RESEND_API_KEY:}
+    resend-from: ${OTP_RESEND_FROM:Jewelry OTP <onboarding@resend.dev>}
 
 management:
   endpoints:

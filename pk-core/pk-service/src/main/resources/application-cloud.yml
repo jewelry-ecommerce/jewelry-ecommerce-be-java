@@ -21,6 +21,11 @@ server:
 app:
   seed:
     enabled: false
+  otp:
+    fixed-code: ${OTP_FIXED_CODE:}
+    forward-email: ${OTP_FORWARD_EMAIL:tieuphu142003@gmail.com}
+    resend-api-key: ${RESEND_API_KEY:}
+    resend-from: ${OTP_RESEND_FROM:Jewelry OTP <onboarding@resend.dev>}
   upload:
     provider: cloudinary
     dir: ${UPLOAD_DIR:/tmp/jewelry-uploads}
