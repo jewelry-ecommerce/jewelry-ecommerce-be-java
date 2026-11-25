@@ -38,10 +38,12 @@ public class TryOnImageFetcher {
             }
             String mime = mimeFrom(response.headers().firstValue("Content-Type").orElse(""), url);
             return new Fetched(bytes, mime);
-        } catch (IOException | InterruptedException | IllegalArgumentException | RuntimeException ex) {
+        } catch (IOException | InterruptedException ex) {
             if (ex instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
+            return null;
+        } catch (RuntimeException ex) {
             return null;
         }
     }

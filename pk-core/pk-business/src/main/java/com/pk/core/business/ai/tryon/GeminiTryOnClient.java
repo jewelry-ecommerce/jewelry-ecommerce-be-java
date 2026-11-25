@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import java.util.ArrayList;
 import java.util.Base64;
@@ -44,7 +43,7 @@ public class GeminiTryOnClient {
         try {
             String raw = post(properties.tryOnVisionModel(), analyzeBody(imageBytes, mimeType, styleHint));
             return parseAnalysis(raw);
-        } catch (RestClientException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             return new TryOnAnalysis(List.of(), List.of(), "Không phân tích được ảnh, thử lại sau");
         } finally {
             semaphore.release();
@@ -62,7 +61,7 @@ public class GeminiTryOnClient {
             String raw = post(properties.tryOnImageModelName(),
                     generateBody(userImage, userMime, productImage, productMime, productName, style, region));
             return firstImageBytes(raw);
-        } catch (RestClientException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             return null;
         } finally {
             semaphore.release();
