@@ -171,18 +171,32 @@ public class GeminiTryOnClient {
             Duration timeout = properties.getTryOnTimeout() == null ? Duration.ofSeconds(90) : properties.getTryOnTimeout();
             // Chỉ x-goog-api-key. Đừng gửi Authorization: Bearer API key —
             // Google coi Bearer là OAuth → HTTP 401 (chat Completions mới dùng Bearer).
-            HttpRequest request = HttpRequest.newBuilder(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
-                    .timeout(timeout)
-                    .header("Content-Type", "application/json")
-                    .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
-                    .POST(HttpRequest.BodyPublishers.ofString(json))
-                    .build();
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("try-on generate HTTP {} {}", response.statusCode(), briefBody(response.body()));
-                throw new IllegalStateException("generateContent HTTP " + response.statusCode());
+            int attempt = 0;
+            while (true) {
+                attempt++;
+                HttpRequest request = HttpRequest.newBuilder(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
+                        .timeout(timeout)
+                        .header("Content-Type", "application/json")
+                        .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
+                        .POST(HttpRequest.BodyPublishers.ofString(json))
+                        .build();
+                HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+                int status = response.statusCode();
+                if (status >= 200 && status < 300) {
+                    return response.body();
+                }
+                log.warn("try-on generate HTTP {} attempt={} {}", status, attempt, briefBody(response.body()));
+                if (status == 429 && attempt < 3) {
+                    // Free-tier image gen hay 429 — chờ rồi thử lại trước khi fail demo.
+                    Thread.sleep(attempt * 15_000L);
+                    continue;
+                }
+                if (status == 429) {
+                    throw new IllegalStateException(
+                            "AI image đang quá tải quota (429). Đợi ~1 phút rồi thử lại, hoặc dùng key Gemini có billing.");
+                }
+                throw new IllegalStateException("generateContent HTTP " + status);
             }
-            return response.body();
         } catch (IOException ex) {
             throw new IllegalStateException("generateContent IO failure", ex);
         } catch (InterruptedException ex) {
