@@ -110,9 +110,10 @@ public class OpenAiTryOnImageClient {
         ObjectNode root = mapper.createObjectNode();
         root.put("model", properties.tryOnImageModelName());
         root.put("prompt", prompt(productName, style, region));
-        root.put("quality", "high");
+        root.put("quality", properties.tryOnImageQualityName());
+        root.put("complexity", properties.tryOnImageComplexityName());
         root.put("size", "1024x1024");
-        root.put("output_format", "png");
+        root.put("output_format", "jpeg");
         ArrayNode images = root.putArray("images");
         images.addObject().put("image_url", dataUrl(userMime, userImage));
         if (productImage != null && productImage.length > 0) {

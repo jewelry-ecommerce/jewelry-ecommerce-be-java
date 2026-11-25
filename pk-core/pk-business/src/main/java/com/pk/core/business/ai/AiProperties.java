@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Locale;
 
 /** Cấu hình AI Stylist tập trung. Secret chỉ qua env, không trả về admin/FE. */
 @Getter
@@ -105,16 +106,22 @@ public class AiProperties {
     private String openAiBaseUrl = "https://api.openai.com/v1";
 
     /**
-     * Model gen ảnh. OpenAI mặc định {@code gpt-image-2.6-sunburst};
+     * Model gen ảnh. OpenAI mặc định {@code gpt-image-2.6-flare} (nhanh hơn sunburst);
      * Gemini mặc định {@code gemini-3.1-flash-image}.
      */
-    private String tryOnImageModel = "gpt-image-2.6-sunburst";
+    private String tryOnImageModel = "gpt-image-2.6-flare";
 
-    /** Timeout analyze + gen ảnh (dài hơn ranking text). */
-    private Duration tryOnTimeout = Duration.ofSeconds(120);
+    /** quality OpenAI: low | medium | high — medium cân UX ~15s. */
+    private String tryOnImageQuality = "medium";
 
-    /** Số mẫu tối đa mỗi lần upload. OpenAI paid: 3 để demo thoải mái. */
-    private int tryOnMaxVariants = 3;
+    /** complexity OpenAI: low | medium | high — low giảm latency edit. */
+    private String tryOnImageComplexity = "low";
+
+    /** Timeout analyze + gen ảnh. */
+    private Duration tryOnTimeout = Duration.ofSeconds(45);
+
+    /** Số mẫu tối đa mỗi lần upload. 1 ảnh để UX ~15s. */
+    private int tryOnMaxVariants = 1;
 
     /** Dung lượng ảnh upload tối đa (bytes). */
     private long tryOnMaxUploadBytes = 5_242_880L;
@@ -150,7 +157,15 @@ public class AiProperties {
         if (!blank(tryOnImageModel)) {
             return tryOnImageModel.trim();
         }
-        return tryOnImageUsesOpenAi() ? "gpt-image-2.6-sunburst" : "gemini-3.1-flash-image";
+        return tryOnImageUsesOpenAi() ? "gpt-image-2.6-flare" : "gemini-3.1-flash-image";
+    }
+
+    public String tryOnImageQualityName() {
+        return blank(tryOnImageQuality) ? "medium" : tryOnImageQuality.trim().toLowerCase(Locale.ROOT);
+    }
+
+    public String tryOnImageComplexityName() {
+        return blank(tryOnImageComplexity) ? "low" : tryOnImageComplexity.trim().toLowerCase(Locale.ROOT);
     }
 
     private String usable(String preferred, String alternate) {
