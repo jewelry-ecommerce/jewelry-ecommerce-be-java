@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Locale;
 
 /** Cấu hình AI Stylist tập trung. Secret chỉ qua env, không trả về admin/FE. */
 @Getter
@@ -93,13 +94,33 @@ public class AiProperties {
             + "Thanh toán COD hoặc PayOS. Phí giao hàng hiện là 0 đồng. "
             + "Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.";
 
-    /** Model sinh ảnh lookalike try-on (Gemini Nano Banana / Flash Image). */
-    private String tryOnImageModel = "gemini-3.1-flash-image";
+    /**
+     * Provider gen ảnh try-on: {@code openai} (trả phí, ổn demo) | {@code gemini}.
+     * Analyze vẫn dùng Gemini chat.
+     */
+    private String tryOnImageProvider = "openai";
 
-    /** Timeout analyze + gen ảnh (dài hơn ranking text). */
-    private Duration tryOnTimeout = Duration.ofSeconds(90);
+    /** OpenAI API key — bắt buộc khi tryOnImageProvider=openai. */
+    private String openAiApiKey = "";
 
-    /** Số mẫu tối đa mỗi lần upload. Default 1 để tránh Gemini image 429 khi demo. */
+    private String openAiBaseUrl = "https://api.openai.com/v1";
+
+    /**
+     * Model gen ảnh. OpenAI mặc định {@code gpt-image-2.6-flare} (nhanh hơn sunburst);
+     * Gemini mặc định {@code gemini-3.1-flash-image}.
+     */
+    private String tryOnImageModel = "gpt-image-2.6-flare";
+
+    /** quality OpenAI: low | medium | high — medium cân UX ~15s. */
+    private String tryOnImageQuality = "medium";
+
+    /** complexity OpenAI: low | medium | high — low giảm latency edit. */
+    private String tryOnImageComplexity = "low";
+
+    /** Timeout analyze + gen ảnh. */
+    private Duration tryOnTimeout = Duration.ofSeconds(45);
+
+    /** Số mẫu tối đa mỗi lần upload. 1 ảnh để UX ~15s. */
     private int tryOnMaxVariants = 1;
 
     /** Dung lượng ảnh upload tối đa (bytes). */
@@ -124,8 +145,27 @@ public class AiProperties {
         return rankingModel();
     }
 
+    public boolean tryOnOpenAiReady() {
+        return tryOnImageUsesOpenAi() && openAiApiKey != null && !openAiApiKey.isBlank();
+    }
+
+    public boolean tryOnImageUsesOpenAi() {
+        return "openai".equalsIgnoreCase(tryOnImageProvider == null ? "" : tryOnImageProvider.trim());
+    }
+
     public String tryOnImageModelName() {
-        return blank(tryOnImageModel) ? "gemini-3.1-flash-image" : tryOnImageModel.trim();
+        if (!blank(tryOnImageModel)) {
+            return tryOnImageModel.trim();
+        }
+        return tryOnImageUsesOpenAi() ? "gpt-image-2.6-flare" : "gemini-3.1-flash-image";
+    }
+
+    public String tryOnImageQualityName() {
+        return blank(tryOnImageQuality) ? "medium" : tryOnImageQuality.trim().toLowerCase(Locale.ROOT);
+    }
+
+    public String tryOnImageComplexityName() {
+        return blank(tryOnImageComplexity) ? "low" : tryOnImageComplexity.trim().toLowerCase(Locale.ROOT);
     }
 
     private String usable(String preferred, String alternate) {
