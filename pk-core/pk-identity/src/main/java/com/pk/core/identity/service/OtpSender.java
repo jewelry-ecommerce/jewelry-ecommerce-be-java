@@ -1,8 +1,8 @@
 package com.pk.core.identity.service;
 
 /**
- * Gửi mã OTP tới số điện thoại. Hiện chỉ có bản ghi log ({@code LogOtpSender}); khi tích hợp nhà cung
- * cấp SMS thật thì viết bean khác implement interface này (đánh dấu {@code @Primary} hoặc bỏ bean log).
+ * Gửi mã OTP sau khi tạo. UI vẫn theo SĐT; triển khai hiện tại forward về mail cố định (Resend)
+ * hoặc chỉ log khi thiếu cấu hình — không SMS.
  */
 public interface OtpSender {
 
