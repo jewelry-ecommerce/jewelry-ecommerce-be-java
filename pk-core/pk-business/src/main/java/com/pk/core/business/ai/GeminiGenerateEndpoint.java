@@ -1,18 +1,21 @@
 package com.pk.core.business.ai;
 
 import java.net.URI;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
-/** URL generateContent giữ nguyên dấu hai chấm. UriBuilder mã hóa dấu này thành %3A và Google trả 404. */
+/**
+ * URL {@code generateContent} giữ nguyên dấu hai chấm trong path.
+ * UriBuilder mã hóa {@code :} thành {@code %3A} và Google trả 404.
+ * Auth qua header {@code x-goog-api-key} — không nhét key vào query (tránh encode lỗi).
+ */
 public final class GeminiGenerateEndpoint {
+
+    public static final String API_KEY_HEADER = "x-goog-api-key";
 
     private GeminiGenerateEndpoint() {
     }
 
-    public static URI uri(String baseUrl, String model, String apiKey) {
-        String key = URLEncoder.encode(apiKey == null ? "" : apiKey, StandardCharsets.UTF_8);
-        return URI.create(trimSlash(baseUrl) + "/models/" + model + ":generateContent?key=" + key);
+    public static URI uri(String baseUrl, String model) {
+        return URI.create(trimSlash(baseUrl) + "/models/" + model + ":generateContent");
     }
 
     private static String trimSlash(String baseUrl) {

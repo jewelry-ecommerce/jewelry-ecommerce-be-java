@@ -55,7 +55,8 @@ public class GeminiAssistantClient {
     private AssistantReplyParser.Draft invoke(String message, List<AiCandidate> catalog) {
         try {
             String raw = client.post()
-                    .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model(), properties.getApiKey()))
+                    .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model()))
+                    .header(GeminiGenerateEndpoint.API_KEY_HEADER, properties.getApiKey())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body(message, catalog))
                     .retrieve()
