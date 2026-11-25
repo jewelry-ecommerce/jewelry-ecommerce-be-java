@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Vision analyze qua Chat Completions (đường chat đang chạy trên Render).
@@ -72,27 +73,53 @@ public class GeminiTryOnClient {
         }
     }
 
-    /** Trả bytes ảnh lookalike (thường PNG/JPEG); null nếu model không sinh ảnh. */
+    /**
+     * Trả bytes ảnh lookalike (PNG/JPEG); null nếu không sinh được.
+     * {@code errorOut[0]} nhận lý do ngắn (HTTP/model) để trả UI — không chứa API key.
+     */
     public byte[] generateLookalike(byte[] userImage, String userMime,
                                     byte[] productImage, String productMime,
-                                    String productName, String style, String region) {
-        if (!semaphore.tryAcquire()) {
+                                    String productName, String style, String region,
+                                    String[] errorOut) {
+        try {
+            if (!semaphore.tryAcquire(60, TimeUnit.SECONDS)) {
+                setError(errorOut, "AI đang bận (hết slot)");
+                return null;
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            setError(errorOut, "AI bị gián đoạn");
             return null;
         }
         try {
-            String raw = postGenerateContent(properties.tryOnImageModelName(),
+            String model = properties.tryOnImageModelName();
+            String raw = postGenerateContent(model,
                     generateBody(userImage, userMime, productImage, productMime, productName, style, region));
             byte[] image = firstImageBytes(raw);
             if (image == null || image.length == 0) {
-                log.warn("try-on generate: response has no inline image data");
+                log.warn("try-on generate: model={} response has no inline image", model);
+                setError(errorOut, "Model " + model + " không trả ảnh");
             }
             return image;
         } catch (RuntimeException ex) {
             log.warn("try-on generate failed: {}", ex.toString());
+            setError(errorOut, briefThrowable(ex));
             return null;
         } finally {
             semaphore.release();
         }
+    }
+
+    private static void setError(String[] errorOut, String message) {
+        if (errorOut != null && errorOut.length > 0 && message != null && !message.isBlank()) {
+            errorOut[0] = message;
+        }
+    }
+
+    private static String briefThrowable(Throwable ex) {
+        String text = ex.getMessage() == null ? ex.toString() : ex.getMessage();
+        String oneLine = text.replaceAll("\\s+", " ").trim();
+        return oneLine.length() <= 120 ? oneLine : oneLine.substring(0, 120);
     }
 
     private String chatVisionText(byte[] imageBytes, String mimeType, String styleHint) {

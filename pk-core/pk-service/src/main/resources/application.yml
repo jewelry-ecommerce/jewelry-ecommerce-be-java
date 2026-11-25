@@ -73,7 +73,7 @@ app:
     max-concurrent-calls: ${AI_MAX_CONCURRENT_CALLS:2}
     max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:1024}
     max-input-chars: ${AI_MAX_INPUT_CHARS:6000}
-    try-on-image-model: ${AI_TRYON_IMAGE_MODEL:gemini-2.5-flash-image}
+    try-on-image-model: ${AI_TRYON_IMAGE_MODEL:gemini-3.1-flash-image}
     try-on-timeout: ${AI_TRYON_TIMEOUT:90s}
     try-on-max-variants: ${AI_TRYON_MAX_VARIANTS:3}
     try-on-max-upload-bytes: ${AI_TRYON_MAX_UPLOAD_BYTES:5242880}

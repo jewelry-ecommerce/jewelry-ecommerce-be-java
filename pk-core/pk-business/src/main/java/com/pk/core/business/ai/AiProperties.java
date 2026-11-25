@@ -93,8 +93,8 @@ public class AiProperties {
             + "Thanh toán COD hoặc PayOS. Phí giao hàng hiện là 0 đồng. "
             + "Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.";
 
-    /** Model sinh ảnh lookalike try-on (Gemini image). */
-    private String tryOnImageModel = "gemini-2.5-flash-image";
+    /** Model sinh ảnh lookalike try-on (Gemini Nano Banana / Flash Image). */
+    private String tryOnImageModel = "gemini-3.1-flash-image";
 
     /** Timeout analyze + gen ảnh (dài hơn ranking text). */
     private Duration tryOnTimeout = Duration.ofSeconds(90);
@@ -125,7 +125,7 @@ public class AiProperties {
     }
 
     public String tryOnImageModelName() {
-        return blank(tryOnImageModel) ? "gemini-2.5-flash-image" : tryOnImageModel.trim();
+        return blank(tryOnImageModel) ? "gemini-3.1-flash-image" : tryOnImageModel.trim();
     }
 
     private String usable(String preferred, String alternate) {

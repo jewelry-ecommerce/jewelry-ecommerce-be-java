@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Orchestrate try-on: validate → vision → pick catalog → gen song song (bounded). */
 @Service
@@ -78,20 +79,26 @@ public class AiTryOnServiceImpl implements AiTryOnService {
         if (picks.isEmpty()) {
             return TryOnResponseDto.fail("Catalog chưa có sản phẩm phù hợp với vùng nhận diện");
         }
-        List<TryOnVariantResponseDto> variants = generateAll(userBytes, userMime, picks);
+        AtomicReference<String> generateError = new AtomicReference<>();
+        List<TryOnVariantResponseDto> variants = generateAll(userBytes, userMime, picks, generateError);
         if (variants.isEmpty()) {
-            return TryOnResponseDto.fail("Không tạo được ảnh đeo thử (ghép trang sức lên ảnh của bạn), thử lại sau");
+            String detail = generateError.get();
+            String message = detail == null || detail.isBlank()
+                    ? "Không tạo được ảnh đeo thử (ghép trang sức lên ảnh của bạn), thử lại sau"
+                    : "Không tạo được ảnh đeo thử: " + detail;
+            return TryOnResponseDto.fail(message);
         }
         return TryOnResponseDto.success(analysis.regions(), variants);
     }
 
     private List<TryOnVariantResponseDto> generateAll(byte[] userBytes, String userMime,
-                                                      List<TryOnCatalogPicker.Picked> picks) {
+                                                     List<TryOnCatalogPicker.Picked> picks,
+                                                     AtomicReference<String> generateError) {
         ExecutorService pool = Executors.newFixedThreadPool(Math.min(3, picks.size()));
         try {
             List<CompletableFuture<TryOnVariantResponseDto>> futures = picks.stream()
                     .map(pick -> CompletableFuture.supplyAsync(
-                            () -> oneVariant(userBytes, userMime, pick), pool))
+                            () -> oneVariant(userBytes, userMime, pick, generateError), pool))
                     .toList();
             CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
             List<TryOnVariantResponseDto> result = new ArrayList<>();
@@ -108,10 +115,11 @@ public class AiTryOnServiceImpl implements AiTryOnService {
     }
 
     private TryOnVariantResponseDto oneVariant(byte[] userBytes, String userMime,
-                                               TryOnCatalogPicker.Picked pick) {
+                                               TryOnCatalogPicker.Picked pick,
+                                               AtomicReference<String> generateError) {
         AiCandidate product = pick.product();
         // Không fallback thumbnail catalog — try-on phải là ảnh ghép AI trên ảnh khách.
-        String tryOnUrl = generateAndStore(userBytes, userMime, pick);
+        String tryOnUrl = generateAndStore(userBytes, userMime, pick, generateError);
         if (tryOnUrl == null || tryOnUrl.isBlank()) {
             return null;
         }
@@ -128,14 +136,20 @@ public class AiTryOnServiceImpl implements AiTryOnService {
                 .build();
     }
 
-    private String generateAndStore(byte[] userBytes, String userMime, TryOnCatalogPicker.Picked pick) {
+    private String generateAndStore(byte[] userBytes, String userMime, TryOnCatalogPicker.Picked pick,
+                                    AtomicReference<String> generateError) {
         TryOnImageFetcher.Fetched productImage = imageFetcher.fetch(pick.product().thumbnailUrl());
         byte[] productBytes = productImage == null ? null : productImage.bytes();
         String productMime = productImage == null ? null : productImage.mimeType();
+        String[] errorOut = new String[1];
         byte[] generated = gemini.generateLookalike(
                 userBytes, userMime,
                 productBytes, productMime,
-                pick.product().name(), pick.style(), pick.region());
+                pick.product().name(), pick.style(), pick.region(),
+                errorOut);
+        if (errorOut[0] != null) {
+            generateError.compareAndSet(null, errorOut[0]);
+        }
         if (generated == null || generated.length == 0) {
             return null;
         }
@@ -144,6 +158,7 @@ public class AiTryOnServiceImpl implements AiTryOnService {
             String key = uploadStorage.save(UploadStorage.Folder.IMAGES, ext, generated);
             return uploadStorage.publicUrl(key);
         } catch (IOException ex) {
+            generateError.compareAndSet(null, "Lưu ảnh minh họa thất bại");
             return null;
         }
     }
