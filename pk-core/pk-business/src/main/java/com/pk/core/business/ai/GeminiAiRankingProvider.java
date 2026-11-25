@@ -76,7 +76,6 @@ public class GeminiAiRankingProvider implements AiRankingProvider {
         Map<String, Object> generation = new LinkedHashMap<>();
         generation.put("maxOutputTokens", Math.max(2048, properties.getMaxOutputTokens()));
         generation.put("responseMimeType", "application/json");
-        generation.put("thinkingConfig", Map.of("thinkingLevel", "MINIMAL"));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("contents", List.of(content));
         payload.put("generationConfig", generation);

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -19,7 +20,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 
-/** Gọi Gemini vision (phân vùng) và model image (lookalike try-on). */
+/**
+ * Vision analyze qua Chat Completions (cùng đường chat đang chạy trên Render).
+ * Lookalike image vẫn dùng {@code generateContent} + fallback thumbnail nếu fail.
+ */
 @Slf4j
 @Component
 public class GeminiTryOnClient {
@@ -46,11 +50,12 @@ public class GeminiTryOnClient {
             return new TryOnAnalysis(List.of(), List.of(), "AI đang bận, thử lại sau");
         }
         try {
-            String raw = post(properties.tryOnVisionModel(), analyzeBody(imageBytes, mimeType, styleHint));
-            return parseAnalysis(raw);
+            String text = chatVisionText(imageBytes, mimeType, styleHint);
+            return parseAnalysisText(text);
         } catch (RestClientResponseException ex) {
             log.warn("try-on analyze HTTP {} {}", ex.getStatusCode().value(), briefBody(ex.getResponseBodyAsString()));
-            return new TryOnAnalysis(List.of(), List.of(), "Không phân tích được ảnh, thử lại sau");
+            return new TryOnAnalysis(List.of(), List.of(),
+                    "Không phân tích được ảnh (HTTP " + ex.getStatusCode().value() + "), thử lại sau");
         } catch (RuntimeException ex) {
             log.warn("try-on analyze failed: {}", ex.toString());
             return new TryOnAnalysis(List.of(), List.of(), "Không phân tích được ảnh, thử lại sau");
@@ -81,6 +86,49 @@ public class GeminiTryOnClient {
         }
     }
 
+    private String chatVisionText(byte[] imageBytes, String mimeType, String styleHint) {
+        String raw = client.post()
+                .uri(chatCompletionsUri())
+                .header("Authorization", "Bearer " + properties.getApiKey())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(chatVisionBody(imageBytes, mimeType, styleHint))
+                .retrieve()
+                .body(String.class);
+        try {
+            JsonNode content = mapper.readTree(raw).path("choices").path(0).path("message").path("content");
+            if (content.isMissingNode() || content.isNull() || content.asText().isBlank()) {
+                throw new IllegalStateException("empty chat vision content");
+            }
+            return content.asText();
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("invalid chat vision response", ex);
+        }
+    }
+
+    private Map<String, Object> chatVisionBody(byte[] imageBytes, String mimeType, String styleHint) {
+        String mime = mimeType == null || mimeType.isBlank() ? "image/jpeg" : mimeType;
+        String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(imageBytes);
+        List<Map<String, Object>> content = List.of(
+                Map.of("type", "text", "text", analyzePrompt(styleHint)),
+                Map.of("type", "image_url", "image_url", Map.of("url", dataUrl)));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("model", properties.chatModel());
+        payload.put("temperature", properties.getTemperature());
+        payload.put("max_tokens", ANALYZE_MAX_OUTPUT_TOKENS);
+        payload.put("messages", List.of(Map.of("role", "user", "content", content)));
+        return payload;
+    }
+
+    private URI chatCompletionsUri() {
+        String base = properties.getChatBaseUrl() == null ? "" : properties.getChatBaseUrl().trim();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return URI.create(base + "/chat/completions");
+    }
+
     private String post(String model, Map<String, Object> body) {
         return client.post()
                 .uri(GeminiGenerateEndpoint.uri(properties.getBaseUrl(), model))
@@ -91,13 +139,6 @@ public class GeminiTryOnClient {
                 .body(String.class);
     }
 
-    private Map<String, Object> analyzeBody(byte[] imageBytes, String mimeType, String styleHint) {
-        List<Map<String, Object>> parts = new ArrayList<>();
-        parts.add(Map.of("text", analyzePrompt(styleHint)));
-        parts.add(inlinePart(mimeType, imageBytes));
-        return contentPayload(parts, true);
-    }
-
     private Map<String, Object> generateBody(byte[] userImage, String userMime,
                                              byte[] productImage, String productMime,
                                              String productName, String style, String region) {
@@ -105,27 +146,14 @@ public class GeminiTryOnClient {
         parts.add(Map.of("text", generatePrompt(productName, style, region)));
         parts.add(inlinePart(userMime, userImage));
         parts.add(inlinePart(productMime, productImage));
-        Map<String, Object> payload = contentPayload(parts, false);
-        Map<String, Object> generation = new LinkedHashMap<>();
-        generation.put("responseModalities", List.of("TEXT", "IMAGE"));
-        payload.put("generationConfig", generation);
-        return payload;
-    }
-
-    private static Map<String, Object> contentPayload(List<Map<String, Object>> parts, boolean jsonMime) {
         Map<String, Object> content = new LinkedHashMap<>();
         content.put("role", "user");
         content.put("parts", parts);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("contents", List.of(content));
-        if (jsonMime) {
-            Map<String, Object> generation = new LinkedHashMap<>();
-            generation.put("responseMimeType", "application/json");
-            // Gemini 3: thinking tokens nằm trong maxOutputTokens — 512 dễ MAX_TOKENS trống.
-            generation.put("maxOutputTokens", ANALYZE_MAX_OUTPUT_TOKENS);
-            generation.put("thinkingConfig", Map.of("thinkingLevel", "MINIMAL"));
-            payload.put("generationConfig", generation);
-        }
+        Map<String, Object> generation = new LinkedHashMap<>();
+        generation.put("responseModalities", List.of("TEXT", "IMAGE"));
+        payload.put("generationConfig", generation);
         return payload;
     }
 
@@ -156,9 +184,8 @@ public class GeminiTryOnClient {
                 + "Không thêm chữ watermark. Không thay đổi khuôn mặt nếu có.";
     }
 
-    private TryOnAnalysis parseAnalysis(String raw) {
+    private TryOnAnalysis parseAnalysisText(String text) {
         try {
-            String text = firstText(mapper.readTree(raw));
             if (text == null || text.isBlank()) {
                 return new TryOnAnalysis(List.of(), List.of(), "AI không trả kết quả phân tích");
             }
@@ -206,23 +233,6 @@ public class GeminiTryOnClient {
         } catch (Exception ex) {
             return null;
         }
-    }
-
-    private static String firstText(JsonNode root) {
-        JsonNode parts = root.path("candidates").path(0).path("content").path("parts");
-        if (!parts.isArray()) {
-            return null;
-        }
-        for (JsonNode part : parts) {
-            // Bỏ thought summary — chỉ lấy phần trả lời.
-            if (part.path("thought").asBoolean(false)) {
-                continue;
-            }
-            if (part.has("text")) {
-                return part.get("text").asText();
-            }
-        }
-        return null;
     }
 
     private static String briefBody(String body) {
