@@ -64,6 +64,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Ai.STYLIST_SESSIONS)).authenticated()
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.ASSISTANT)).permitAll()
                         .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.STYLIST_RECOMMENDATIONS)).permitAll()
+                        .requestMatchers(HttpMethod.POST, v1(UrlConstant.Ai.STYLIST_TRY_ON)).permitAll()
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.Badge.BASE)).permitAll()
                         .requestMatchers(HttpMethod.GET, v1(UrlConstant.PreOrder.CURRENT)).permitAll()
                         // CMS storefront (trang đã PUBLISHED theo slug) và render banner theo vị trí: công khai, chỉ GET.

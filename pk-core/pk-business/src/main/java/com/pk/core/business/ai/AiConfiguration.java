@@ -24,6 +24,11 @@ public class AiConfiguration {
         return client(properties.getBaseUrl(), properties.getAssistantTimeout());
     }
 
+    @Bean("tryOnRestClient")
+    RestClient tryOnRestClient(AiProperties properties) {
+        return client(properties.getBaseUrl(), properties.getTryOnTimeout());
+    }
+
     private static RestClient client(String baseUrl, Duration timeout) {
         HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);

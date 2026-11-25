@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.pk.core.business.service.AiAssistantService;
 import com.pk.core.business.service.AiStylistService;
+import com.pk.core.business.service.AiTryOnService;
 import com.pk.core.business.web.AbstractRest;
 import com.pk.core.common.exception.BusinessException;
 import com.pk.core.common.exception.ErrorCode;
@@ -17,11 +18,15 @@ import com.pk.core.model.dto.request.StylistRequestDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Gợi ý stylist công khai. Feedback và lịch sử phiên bắt buộc đăng nhập. */
 @RestController
@@ -31,6 +36,7 @@ public class AiRest extends AbstractRest {
 
     private final AiStylistService aiStylistService;
     private final AiAssistantService aiAssistantService;
+    private final AiTryOnService aiTryOnService;
 
     @PostMapping(UrlConstant.Ai.ASSISTANT)
     public BaseRes assistant(@Valid @RequestBody AssistantMessageRequestDto request,
@@ -49,6 +55,17 @@ public class AiRest extends AbstractRest {
                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             return restSuccessHandle.handleSuccess(aiStylistService.recommend(request, userId(principal)));
+        } catch (Exception ex) {
+            return restErrorHandle.handleException(ex, httpRequest, httpResponse);
+        }
+    }
+
+    @PostMapping(value = UrlConstant.Ai.STYLIST_TRY_ON, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public BaseRes tryOn(@RequestPart("image") MultipartFile image,
+                         @RequestParam(value = "styleHint", required = false) String styleHint,
+                         HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        try {
+            return restSuccessHandle.handleSuccess(aiTryOnService.tryOn(image, styleHint));
         } catch (Exception ex) {
             return restErrorHandle.handleException(ex, httpRequest, httpResponse);
         }

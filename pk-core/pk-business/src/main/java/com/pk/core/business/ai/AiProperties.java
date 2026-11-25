@@ -93,6 +93,18 @@ public class AiProperties {
             + "Thanh toán COD hoặc PayOS. Phí giao hàng hiện là 0 đồng. "
             + "Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.";
 
+    /** Model sinh ảnh lookalike try-on (Gemini image). */
+    private String tryOnImageModel = "gemini-2.5-flash-image";
+
+    /** Timeout analyze + gen ảnh (dài hơn ranking text). */
+    private Duration tryOnTimeout = Duration.ofSeconds(90);
+
+    /** Số mẫu tối đa mỗi lần upload (2–3). */
+    private int tryOnMaxVariants = 3;
+
+    /** Dung lượng ảnh upload tối đa (bytes). */
+    private long tryOnMaxUploadBytes = 5_242_880L;
+
     public boolean providerReady() {
         return enabled
                 && PROVIDER_GEMINI.equalsIgnoreCase(provider)
@@ -106,6 +118,14 @@ public class AiProperties {
 
     public String rankingModel() {
         return usable(model, currentModel);
+    }
+
+    public String tryOnVisionModel() {
+        return rankingModel();
+    }
+
+    public String tryOnImageModelName() {
+        return blank(tryOnImageModel) ? "gemini-2.5-flash-image" : tryOnImageModel.trim();
     }
 
     private String usable(String preferred, String alternate) {
