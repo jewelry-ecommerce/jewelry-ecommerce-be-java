@@ -20,7 +20,7 @@ public final class TryOnCatalogPicker {
             return List.of();
         }
         List<String> useStyles = styles == null || styles.isEmpty() ? TryOnBodyRegion.STYLES : styles;
-        int limit = Math.min(Math.max(2, max), 3);
+        int limit = Math.min(Math.max(1, max), 3);
         List<Picked> picks = new ArrayList<>();
         Set<Long> usedIds = new HashSet<>();
         for (String style : useStyles) {

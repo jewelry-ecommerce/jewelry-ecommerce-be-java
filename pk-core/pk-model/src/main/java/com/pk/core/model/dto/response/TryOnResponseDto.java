@@ -26,11 +26,15 @@ public class TryOnResponseDto {
             "Ảnh minh họa AI; sản phẩm mua là đúng hàng trên web (lookalike, không cam kết pixel-đúng 100%).";
 
     public static TryOnResponseDto fail(String message) {
+        return fail(message, List.of());
+    }
+
+    public static TryOnResponseDto fail(String message, List<String> detectedRegions) {
         return TryOnResponseDto.builder()
                 .ok(false)
                 .message(message)
                 .disclaimer(DISCLAIMER)
-                .detectedRegions(List.of())
+                .detectedRegions(detectedRegions == null ? List.of() : detectedRegions)
                 .variants(List.of())
                 .build();
     }

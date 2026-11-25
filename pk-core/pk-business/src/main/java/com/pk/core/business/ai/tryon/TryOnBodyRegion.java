@@ -33,7 +33,7 @@ public final class TryOnBodyRegion {
             case WRIST -> Set.of("lắc", "vòng", "bracelet", "charm");
             case ANKLE -> Set.of("lắc", "chân", "ankle", "charm");
             case NECK -> Set.of("dây", "chuyền", "necklace", "mặt");
-            case EAR -> Set.of("bông", "tai", "khuyên", "earring");
+            case EAR -> Set.of("bông", "tai", "khuyên", "earring", "hoa tai");
             case FINGER, HAND_COMBO -> Set.of("nhẫn", "ring", "charm");
             default -> Set.of();
         };
