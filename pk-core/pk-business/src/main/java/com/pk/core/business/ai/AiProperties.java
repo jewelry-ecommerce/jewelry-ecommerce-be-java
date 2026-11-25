@@ -93,14 +93,28 @@ public class AiProperties {
             + "Thanh toán COD hoặc PayOS. Phí giao hàng hiện là 0 đồng. "
             + "Khách đăng nhập để xem đơn. Shop không bịa thời gian đổi trả.";
 
-    /** Model sinh ảnh lookalike try-on (Gemini Nano Banana / Flash Image). */
-    private String tryOnImageModel = "gemini-3.1-flash-image";
+    /**
+     * Provider gen ảnh try-on: {@code openai} (trả phí, ổn demo) | {@code gemini}.
+     * Analyze vẫn dùng Gemini chat.
+     */
+    private String tryOnImageProvider = "openai";
+
+    /** OpenAI API key — bắt buộc khi tryOnImageProvider=openai. */
+    private String openAiApiKey = "";
+
+    private String openAiBaseUrl = "https://api.openai.com/v1";
+
+    /**
+     * Model gen ảnh. OpenAI mặc định {@code gpt-image-2.6-sunburst};
+     * Gemini mặc định {@code gemini-3.1-flash-image}.
+     */
+    private String tryOnImageModel = "gpt-image-2.6-sunburst";
 
     /** Timeout analyze + gen ảnh (dài hơn ranking text). */
-    private Duration tryOnTimeout = Duration.ofSeconds(90);
+    private Duration tryOnTimeout = Duration.ofSeconds(120);
 
-    /** Số mẫu tối đa mỗi lần upload. Default 1 để tránh Gemini image 429 khi demo. */
-    private int tryOnMaxVariants = 1;
+    /** Số mẫu tối đa mỗi lần upload. OpenAI paid: 3 để demo thoải mái. */
+    private int tryOnMaxVariants = 3;
 
     /** Dung lượng ảnh upload tối đa (bytes). */
     private long tryOnMaxUploadBytes = 5_242_880L;
@@ -124,8 +138,19 @@ public class AiProperties {
         return rankingModel();
     }
 
+    public boolean tryOnOpenAiReady() {
+        return tryOnImageUsesOpenAi() && openAiApiKey != null && !openAiApiKey.isBlank();
+    }
+
+    public boolean tryOnImageUsesOpenAi() {
+        return "openai".equalsIgnoreCase(tryOnImageProvider == null ? "" : tryOnImageProvider.trim());
+    }
+
     public String tryOnImageModelName() {
-        return blank(tryOnImageModel) ? "gemini-3.1-flash-image" : tryOnImageModel.trim();
+        if (!blank(tryOnImageModel)) {
+            return tryOnImageModel.trim();
+        }
+        return tryOnImageUsesOpenAi() ? "gpt-image-2.6-sunburst" : "gemini-3.1-flash-image";
     }
 
     private String usable(String preferred, String alternate) {

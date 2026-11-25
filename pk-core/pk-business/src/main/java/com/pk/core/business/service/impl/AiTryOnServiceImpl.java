@@ -4,6 +4,7 @@ import com.pk.core.business.ai.AiCandidate;
 import com.pk.core.business.ai.AiProperties;
 import com.pk.core.business.ai.AiRecommendationOrchestrator;
 import com.pk.core.business.ai.tryon.GeminiTryOnClient;
+import com.pk.core.business.ai.tryon.OpenAiTryOnImageClient;
 import com.pk.core.business.ai.tryon.TryOnAnalysis;
 import com.pk.core.business.ai.tryon.TryOnBodyRegion;
 import com.pk.core.business.ai.tryon.TryOnCatalogPicker;
@@ -28,17 +29,20 @@ public class AiTryOnServiceImpl implements AiTryOnService {
     private final AiProperties properties;
     private final AiRecommendationOrchestrator orchestrator;
     private final GeminiTryOnClient gemini;
+    private final OpenAiTryOnImageClient openAiImage;
     private final TryOnImageFetcher imageFetcher;
     private final UploadStorage uploadStorage;
 
     public AiTryOnServiceImpl(AiProperties properties,
                               AiRecommendationOrchestrator orchestrator,
                               GeminiTryOnClient gemini,
+                              OpenAiTryOnImageClient openAiImage,
                               TryOnImageFetcher imageFetcher,
                               UploadStorage uploadStorage) {
         this.properties = properties;
         this.orchestrator = orchestrator;
         this.gemini = gemini;
+        this.openAiImage = openAiImage;
         this.imageFetcher = imageFetcher;
         this.uploadStorage = uploadStorage;
     }
@@ -130,11 +134,13 @@ public class AiTryOnServiceImpl implements AiTryOnService {
         byte[] productBytes = productImage == null ? null : productImage.bytes();
         String productMime = productImage == null ? null : productImage.mimeType();
         String[] errorOut = new String[1];
-        byte[] generated = gemini.generateLookalike(
-                userBytes, userMime,
-                productBytes, productMime,
-                pick.product().name(), pick.style(), pick.region(),
-                errorOut);
+        byte[] generated = properties.tryOnImageUsesOpenAi()
+                ? openAiImage.generateLookalike(
+                        userBytes, userMime, productBytes, productMime,
+                        pick.product().name(), pick.style(), pick.region(), errorOut)
+                : gemini.generateLookalike(
+                        userBytes, userMime, productBytes, productMime,
+                        pick.product().name(), pick.style(), pick.region(), errorOut);
         if (errorOut[0] != null) {
             generateError.compareAndSet(null, errorOut[0]);
         }
