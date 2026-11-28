@@ -10,6 +10,7 @@ import com.pk.core.common.exception.ResourceNotFoundException;
 import com.pk.core.common.util.PhoneUtil;
 import com.pk.core.identity.security.model.Permission;
 import com.pk.core.identity.service.AdminUserService;
+import com.pk.core.identity.service.OtpSender;
 import com.pk.core.identity.service.RefreshTokenService;
 import com.pk.core.model.dto.request.AdminUserCreateRequestDto;
 import com.pk.core.model.dto.request.AdminUserRolesRequestDto;
@@ -38,6 +39,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final RoleRepo roles;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokens;
+    private final OtpSender otpSender;
 
     @Transactional
     @Override
@@ -59,6 +61,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         user.setEmail(email);
         users.create(user);
         writeRoles(user.getId(), roleNames);
+        // Gửi OTP welcome qua mail forward (Resend) — cùng kênh OTP client; không SMS.
+        String inviteCode = String.format("%06d", java.util.concurrent.ThreadLocalRandom.current().nextInt(0, 1_000_000));
+        otpSender.send(phone, inviteCode, "ADMIN_INVITE");
         return toDto(user);
     }
 

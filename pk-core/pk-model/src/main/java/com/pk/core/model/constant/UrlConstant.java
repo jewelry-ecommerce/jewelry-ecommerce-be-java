@@ -49,6 +49,8 @@ public class UrlConstant {
         /** Tìm kiếm: GET /search/trending, GET /search/suggestions?q, và lịch sử (cần đăng nhập) /search/history. */
         public final String SEARCH = BASE + "/search";
         /** Chi tiết theo slug: BASE + "/{slug}" - ghép ở Rest bằng @GetMapping(BASE + "/{slug}"). */
+        /** Đánh giá công khai theo productId. */
+        public final String REVIEWS = BASE + "/reviews";
     }
 
     /** CustomerAddressRest (pk-api) - sổ địa chỉ của khách đang đăng nhập. CHƯA có GET/PUT BASE (sửa

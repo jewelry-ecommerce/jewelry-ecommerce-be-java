@@ -111,6 +111,9 @@ public static final String ORDER_NOTES = "order_notes";
     // Phân quyền trang theo user (V43)
     public static final String USER_PAGE_PERMISSIONS = "user_page_permissions";
 
+    // Đánh giá sản phẩm (V44)
+    public static final String PRODUCT_REVIEWS = "product_reviews";
+
     private TableConstant() {
     }
 }

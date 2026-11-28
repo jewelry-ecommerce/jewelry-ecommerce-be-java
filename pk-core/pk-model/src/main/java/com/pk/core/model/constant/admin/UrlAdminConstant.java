@@ -184,4 +184,10 @@ public class UrlAdminConstant {
         /** Catalog trang cố định cho matrix phân quyền (ROOT). */
         public final String PERMISSION_PAGES = Common.BASE + "/permission-pages";
     }
+
+    /** AdminProductReviewRest — duyệt đánh giá sản phẩm. */
+    @UtilityClass
+    public static class ProductReview {
+        public final String BASE = Common.BASE + "/product-reviews";
+    }
 }

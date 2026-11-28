@@ -102,6 +102,9 @@ public class LogOtpSender implements OtpSender {
         if ("RESET_PASSWORD".equals(purpose)) {
             return "quên mật khẩu";
         }
+        if ("ADMIN_INVITE".equals(purpose)) {
+            return "tạo tài khoản admin";
+        }
         return purpose == null ? "OTP" : purpose;
     }
 }

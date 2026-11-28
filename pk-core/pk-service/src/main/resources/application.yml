@@ -95,6 +95,9 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://localhost:6100,http://localhost:3100,https://jewelry-ecommerce-client.vercel.app}
   seed:
     enabled: ${SEED_ENABLED:false}
+  pim:
+    # Thesis chốt B: tạo/sửa sản phẩm phải qua duyệt trước khi xuất bản.
+    require-approval: ${PIM_REQUIRE_APPROVAL:true}
   # OTP: UI theo SĐT; không SMS. Có OTP_FORWARD_EMAIL + RESEND_API_KEY → gửi về 1 mail (Resend free).
   otp:
     fixed-code: ${OTP_FIXED_CODE:}
